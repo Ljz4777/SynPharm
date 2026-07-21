@@ -1,0 +1,54 @@
+# ============== 后端（Spring Boot） ==============
+synpharm-backend/target/
+synpharm-backend/*.jar
+synpharm-backend/*.war
+synpharm-backend/.mvn/
+synpharm-backend/mvnw
+synpharm-backend/mvnw.cmd
+
+# ============== 前端（Vue + Vite） ==============
+synpharm-frontend/node_modules/
+synpharm-frontend/dist/
+synpharm-frontend/dist-ssr/
+synpharm-frontend/.vite/
+synpharm-frontend/*.log
+
+# 前端环境变量（含敏感信息，不要提交！）
+synpharm-frontend/.env
+synpharm-frontend/.env.local
+synpharm-frontend/.env.*.local
+
+# ============== IDE / 编辑器 ==============
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+.classpath
+.project
+.settings/
+
+# ============== 操作系统 ==============
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ============== 日志 ==============
+*.log
+logs/
+log/
+
+# ============== 数据库 ==============
+*.db
+*.sqlite
+*.sql.bak
+
+# ============== 临时文件 ==============
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# ============== Maven 本地仓库（如果有的话） ==============
+.m2/repository/
