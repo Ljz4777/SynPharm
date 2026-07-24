@@ -88,6 +88,34 @@
             <span v-if="errors.confirmPassword" class="register__form-error">{{ errors.confirmPassword }}</span>
           </div>
           
+          <div class="register__form-group">
+            <label class="register__form-label">验证码</label>
+            <div class="register__captcha-row">
+              <input 
+                v-model="form.captcha" 
+                type="text"
+                maxlength="6"
+                class="register__form-input register__form-input--captcha"
+                :class="{ 'register__form-input--error': errors.captcha }"
+                placeholder="请输入6位验证码"
+                @blur="validateCaptcha"
+                @input="errors.captcha && validateCaptcha()"
+              />
+              <button 
+                type="button"
+                class="register__captcha-btn"
+                :disabled="isSendingCaptcha || countdown > 0 || !isEmailValid"
+                @click="handleSendCaptcha"
+              >
+                <span v-if="isSendingCaptcha">发送中...</span>
+                <span v-else-if="countdown > 0">{{ countdown }}s</span>
+                <span v-else>发送验证码</span>
+              </button>
+            </div>
+            <span v-if="errors.captcha" class="register__form-error">{{ errors.captcha }}</span>
+            <span v-if="captchaMessage" class="register__form-hint">{{ captchaMessage }}</span>
+          </div>
+          
           <label class="register__form-checkbox">
             <input type="checkbox" v-model="agreeTerms" />
             <span>我已阅读并同意</span>
@@ -99,7 +127,7 @@
           <button 
             type="submit" 
             class="register__form-btn"
-            :disabled="isLoading || !agreeTerms"
+            :disabled="isLoading || !agreeTerms || !isValid"
           >
             {{ isLoading ? '注册中...' : '注册' }}
           </button>
@@ -131,10 +159,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useRouter } from 'vue-router'
 import { validateQqEmail, validatePassword, validateNickname } from '@/utils/validators'
+
+const IS_MOCK = import.meta.env.VITE_ENABLE_MOCK === 'true'
 
 const authStore = useAuthStore()
 const router = useRouter()
@@ -143,19 +173,42 @@ const form = reactive({
   email: '',
   nickname: '',
   password: '',
-  confirmPassword: ''
+  confirmPassword: '',
+  captcha: ''
 })
 
 const agreeTerms = ref(false)
 const isLoading = ref(false)
+const isSendingCaptcha = ref(false)
+const countdown = ref(0)
 const message = ref('')
 const messageType = ref<'success' | 'error'>('success')
+const captchaMessage = ref('')
 
 const errors = reactive({
   email: '',
   nickname: '',
   password: '',
-  confirmPassword: ''
+  confirmPassword: '',
+  captcha: ''
+})
+
+const isEmailValid = computed(() => {
+  return validateQqEmail(form.email).valid && form.email.trim() !== ''
+})
+
+const isValid = computed(() => {
+  const baseValid = isEmailValid.value && 
+         !errors.nickname && form.nickname.trim() !== '' &&
+         !errors.password && form.password.trim() !== '' &&
+         !errors.confirmPassword && form.confirmPassword.trim() !== '' &&
+         agreeTerms.value
+  
+  if (IS_MOCK) {
+    return baseValid
+  }
+  
+  return baseValid && !errors.captcha && form.captcha.trim() !== ''
 })
 
 const validateEmail = (): boolean => {
@@ -189,28 +242,74 @@ const validateConfirmPassword = (): boolean => {
   return true
 }
 
-const validate = (): boolean => {
-  const emailValid = validateEmail()
-  const nicknameValid = validateNicknameField()
-  const passwordValid = validatePasswordField()
-  const confirmValid = validateConfirmPassword()
+const validateCaptcha = (): boolean => {
+  if (!form.captcha) {
+    errors.captcha = '请输入验证码'
+    return false
+  }
+  if (!/^\d{6}$/.test(form.captcha)) {
+    errors.captcha = '验证码为6位数字'
+    return false
+  }
+  errors.captcha = ''
+  return true
+}
+
+const handleSendCaptcha = async () => {
+  if (!isEmailValid.value) {
+    errors.email = '请输入正确的QQ邮箱'
+    return
+  }
   
-  return emailValid && nicknameValid && passwordValid && confirmValid && agreeTerms.value
+  isSendingCaptcha.value = true
+  
+  const result = await authStore.sendCaptcha(form.email, 'register')
+  
+  if (result.success) {
+    captchaMessage.value = result.message
+    countdown.value = 60
+    
+    const timer = setInterval(() => {
+      countdown.value--
+      if (countdown.value <= 0) {
+        clearInterval(timer)
+      }
+    }, 1000)
+  } else {
+    message.value = result.message
+    messageType.value = 'error'
+  }
+  
+  isSendingCaptcha.value = false
 }
 
 const handleRegister = async () => {
-  if (!validate()) return
+  validateEmail()
+  validateNicknameField()
+  validatePasswordField()
+  validateConfirmPassword()
+  if (!IS_MOCK) {
+    validateCaptcha()
+  }
+  
+  if (!isValid.value) return
   
   isLoading.value = true
   message.value = ''
   
-  const result = await authStore.register(form)
+  const result = await authStore.register({
+    email: form.email,
+    nickname: form.nickname,
+    password: form.password,
+    confirmPassword: form.confirmPassword,
+    captcha: form.captcha
+  })
   
   if (result.success) {
     message.value = result.message
     messageType.value = 'success'
     setTimeout(() => {
-      router.push('/login')
+      router.push('/dashboard')
     }, 1500)
   } else {
     message.value = result.message
@@ -377,6 +476,42 @@ const handleGuestLogin = async () => {
 .register__form-error {
   font-size: $font-size-xs;
   color: $error-color;
+}
+
+.register__form-hint {
+  font-size: $font-size-xs;
+  color: $success-color;
+}
+
+.register__captcha-row {
+  display: flex;
+  gap: $spacing-sm;
+}
+
+.register__form-input--captcha {
+  flex: 1;
+}
+
+.register__captcha-btn {
+  padding: $spacing-md $spacing-lg;
+  background: $primary-color;
+  color: #ffffff;
+  border: none;
+  border-radius: $border-radius-md;
+  font-size: $font-size-sm;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background $transition-fast;
+  
+  &:hover:not(:disabled) {
+    background: $primary-dark;
+  }
+  
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    background: $border-color;
+  }
 }
 
 .register__form-checkbox {

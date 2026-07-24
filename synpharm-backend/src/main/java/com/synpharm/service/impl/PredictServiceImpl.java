@@ -1,8 +1,11 @@
 package com.synpharm.service.impl;
 
+import com.synpharm.client.FastApiClient;
 import com.synpharm.dto.request.DDIPredictRequest;
 import com.synpharm.dto.request.DTIPredictRequest;
 import com.synpharm.dto.request.PPIPredictRequest;
+import com.synpharm.dto.request.PredictRequest;
+import com.synpharm.dto.response.AlgoResponse;
 import com.synpharm.dto.response.PredictResultResponse;
 import com.synpharm.service.PredictService;
 import lombok.RequiredArgsConstructor;
@@ -11,59 +14,69 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Random;
 
-/**
- * 预测服务实现
- */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class PredictServiceImpl implements PredictService {
 
-    private final Random random = new Random();
+    private final FastApiClient fastApiClient;
 
     @Override
     public PredictResultResponse predictDTI(DTIPredictRequest request, Long userId) {
         log.info("DTI预测请求: userId={}, smiles={}, targetId={}", userId, request.getSmiles(), request.getTargetId());
-        return generateMockResult("DTI", request.getTargetId());
+
+        PredictRequest predictRequest = PredictRequest.forDTI(request.getSmiles(), request.getTargetId());
+        AlgoResponse response = fastApiClient.predictSingle(predictRequest);
+
+        return convertToResponse(response, "DTI");
     }
 
     @Override
     public PredictResultResponse predictPPI(PPIPredictRequest request, Long userId) {
         log.info("PPI预测请求: userId={}", userId);
-        return generateMockResult("PPI", "PPI_TARGET");
+
+        PredictRequest predictRequest = PredictRequest.forPPI(request.getProteinA(), request.getProteinB());
+        AlgoResponse response = fastApiClient.predictSingle(predictRequest);
+
+        return convertToResponse(response, "PPI");
     }
 
     @Override
     public PredictResultResponse predictDDI(DDIPredictRequest request, Long userId) {
         log.info("DDI预测请求: userId={}", userId);
-        return generateMockResult("DDI", "DDI_TARGET");
+
+        PredictRequest predictRequest = PredictRequest.forDDI(request.getDrugA(), request.getDrugB());
+        AlgoResponse response = fastApiClient.predictSingle(predictRequest);
+
+        return convertToResponse(response, "DDI");
     }
 
-    private PredictResultResponse generateMockResult(String type, String targetId) {
-        double bindingAffinity = -5.0 - random.nextDouble() * 10;
-        double confidenceScore = 0.7 + random.nextDouble() * 0.3;
-        String confidenceLevel = confidenceScore >= 0.9 ? "高" : confidenceScore >= 0.8 ? "中" : "低";
+    private PredictResultResponse convertToResponse(AlgoResponse response, String algoType) {
+        if (response == null || response.getMetrics() == null) {
+            throw new RuntimeException("预测结果为空");
+        }
 
+        var metrics = response.getMetrics();
         List<PredictResultResponse.InteractionInfo> interactions = new ArrayList<>();
-        interactions.add(PredictResultResponse.InteractionInfo.builder()
-                .residue("ASP123")
-                .type("氢键")
-                .distance(2.8 + random.nextDouble() * 0.5)
-                .build());
-        interactions.add(PredictResultResponse.InteractionInfo.builder()
-                .residue("LYS456")
-                .type("疏水作用")
-                .distance(3.5 + random.nextDouble() * 1.0)
-                .build());
+
+        if (metrics.getInteractions() != null) {
+            for (var interaction : metrics.getInteractions()) {
+                interactions.add(PredictResultResponse.InteractionInfo.builder()
+                        .residue(interaction.getResidue())
+                        .type(interaction.getType())
+                        .distance(interaction.getDistance())
+                        .build());
+            }
+        }
 
         return PredictResultResponse.builder()
-                .targetId(targetId)
-                .targetName("目标蛋白")
-                .bindingAffinity(Math.round(bindingAffinity * 100.0) / 100.0)
-                .confidenceScore(Math.round(confidenceScore * 100.0) / 100.0)
-                .confidenceLevel(confidenceLevel)
+                .algoType(algoType)
+                .targetId(metrics.getTargetId())
+                .targetName(metrics.getTargetName())
+                .bindingAffinity(metrics.getBindingAffinity())
+                .confidenceScore(metrics.getConfidenceScore())
+                .confidenceLevel(metrics.getConfidenceLevel())
                 .interactions(interactions)
                 .build();
     }

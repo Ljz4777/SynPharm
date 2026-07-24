@@ -1,12 +1,17 @@
 package com.synpharm.service.impl;
 
 import com.synpharm.dto.request.LoginRequest;
+import com.synpharm.dto.request.RegisterRequest;
 import com.synpharm.dto.response.LoginResponse;
+import com.synpharm.dto.response.UserResponse;
 import com.synpharm.exception.BusinessException;
 import com.synpharm.exception.ErrorCode;
 import com.synpharm.model.entity.SysLoginLog;
+import com.synpharm.model.entity.SysUser;
 import com.synpharm.repository.mapper.SysLoginLogMapper;
+import com.synpharm.repository.mapper.SysUserMapper;
 import com.synpharm.service.AuthService;
+import com.synpharm.service.CaptchaService;
 import com.synpharm.service.strategy.LoginStrategyFactory;
 import com.synpharm.utils.IpUtils;
 import com.synpharm.utils.JwtUtils;
@@ -14,8 +19,11 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -27,6 +35,7 @@ import java.util.concurrent.TimeUnit;
  *   <li>委托给具体的登录策略执行</li>
  *   <li>登录日志记录</li>
  *   <li>登出处理（Token黑名单）</li>
+ *   <li>用户注册（带QQ邮箱验证码验证）</li>
  * </ol>
  *
  * <p>设计原则：
@@ -37,7 +46,7 @@ import java.util.concurrent.TimeUnit;
  * </ul>
  *
  * @author SynPharm Team
- * @version 2.0.0
+ * @version 2.1.0
  */
 @Slf4j
 @Service
@@ -55,6 +64,15 @@ public class AuthServiceImpl implements AuthService {
 
     /** 登录日志Mapper */
     private final SysLoginLogMapper loginLogMapper;
+
+    /** 用户Mapper */
+    private final SysUserMapper userMapper;
+
+    /** 验证码服务 */
+    private final CaptchaService captchaService;
+
+    /** BCrypt密码编码器 */
+    private final BCryptPasswordEncoder passwordEncoder;
 
     /** Redis Key前缀（统一定义，避免魔法值） */
     private static final String LOGIN_FAIL_KEY = "login:fail:";
@@ -144,6 +162,72 @@ public class AuthServiceImpl implements AuthService {
         } catch (Exception e) {
             // Token解析失败也没关系，说明Token本来就无效
             log.warn("Token加入黑名单失败: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * 用户注册
+     * <p>流程：
+     * <ol>
+     *   <li>验证邮箱验证码</li>
+     *   <li>检查邮箱是否已注册</li>
+     *   <li>创建用户（密码BCrypt加密）</li>
+     *   <li>生成JWT Token</li>
+     *   <li>记录登录日志</li>
+     * </ol>
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public LoginResponse register(RegisterRequest request, HttpServletRequest httpRequest) {
+        String email = request.getEmail();
+        String ip = IpUtils.getClientIp(httpRequest);
+        String userAgent = httpRequest.getHeader("User-Agent");
+
+        // ========== 第一步：验证邮箱验证码 ==========
+        boolean captchaValid = captchaService.verifyCaptcha(email, request.getCaptcha(), "register");
+        if (!captchaValid) {
+            log.warn("验证码验证失败, email: {}", email);
+            throw new BusinessException(ErrorCode.CAPTCHA_ERROR, "验证码错误或已过期");
+        }
+
+        // ========== 第二步：检查邮箱是否已注册 ==========
+        SysUser existingUser = userMapper.selectByEmail(email);
+        if (existingUser != null) {
+            log.warn("邮箱已被注册, email: {}", email);
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "该邮箱已被注册");
+        }
+
+        // ========== 第三步：创建用户 ==========
+        try {
+            SysUser user = new SysUser();
+            user.setEmail(email);
+            user.setPassword(passwordEncoder.encode(request.getPassword()));
+            user.setNickname(request.getNickname());
+            user.setRegisterType("qq_email");
+            user.setCreatedAt(LocalDateTime.now());
+            user.setUpdatedAt(LocalDateTime.now());
+
+            userMapper.insert(user);
+            log.info("用户注册成功, email: {}", email);
+
+            // ========== 第四步：生成Token并返回 ==========
+            String token = jwtUtils.generateToken(user.getId(), user.getEmail());
+            long expiresIn = jwtUtils.getExpiration();
+
+            // ========== 第五步：记录登录日志 ==========
+            saveLoginLog(user.getId(), email, "register", ip, userAgent, 1, null, "email");
+
+            return LoginResponse.builder()
+                    .accessToken(token)
+                    .tokenType("Bearer")
+                    .expiresIn(expiresIn)
+                    .isNewUser(true)
+                    .user(UserResponse.fromEntity(user))
+                    .build();
+
+        } catch (Exception e) {
+            log.error("用户注册失败, email: {}", email, e);
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "注册失败，请重试");
         }
     }
 

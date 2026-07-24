@@ -18,7 +18,6 @@ spring:
       database: 0
       timeout: 3000ms
 
-  # 邮件配置（QQ邮箱发送验证码）
   mail:
     host: smtp.qq.com
     port: 465
@@ -32,6 +31,11 @@ spring:
             enable: true
           starttls:
             enable: true
+
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
 
 mybatis-plus:
   mapper-locations: classpath*:/mapper/**/*.xml
@@ -63,6 +67,14 @@ logging:
     com.synpharm: debug
     com.baomidou.mybatisplus: info
 
-# 应用配置
+file:
+  upload-dir: ${FILE_UPLOAD_DIR:./uploads}
+  result-dir: ${FILE_RESULT_DIR:./results}
+
+fastapi:
+  base-url: ${FASTAPI_URL:http://localhost:8000}
+  timeout-single: ${FASTAPI_TIMEOUT_SINGLE:30000}
+  timeout-batch: ${FASTAPI_TIMEOUT_BATCH:60000}
+
 app:
   name: SynPharm

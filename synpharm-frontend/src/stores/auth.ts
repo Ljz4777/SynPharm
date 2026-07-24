@@ -2,6 +2,11 @@ import { defineStore } from 'pinia'
 import type { User, LoginCredentials, RegisterData, LoginResult, RegisterResult } from '@/types'
 import { authApi } from '@/api/auth'
 
+export interface SendCaptchaResult {
+  success: boolean
+  message: string
+}
+
 const STORAGE_KEY = {
   USER: 'auth_user',
   TOKEN: 'auth_token',
@@ -126,7 +131,7 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
-    async register(data: RegisterData): Promise<RegisterResult> {
+    async register(data: RegisterData & { captcha: string }): Promise<RegisterResult> {
       if (USE_MOCK) {
         return this.mockRegister(data)
       }
@@ -156,7 +161,31 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
-    async mockRegister(data: RegisterData): Promise<RegisterResult> {
+    async sendCaptcha(email: string, type: string): Promise<SendCaptchaResult> {
+      if (USE_MOCK) {
+        await new Promise(resolve => setTimeout(resolve, 500))
+        return {
+          success: true,
+          message: '验证码已发送，有效期1分钟'
+        }
+      }
+      
+      try {
+        await authApi.sendCaptcha(email, type)
+        return {
+          success: true,
+          message: '验证码已发送，有效期1分钟'
+        }
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : '发送失败'
+        return {
+          success: false,
+          message
+        }
+      }
+    },
+
+    async mockRegister(data: RegisterData & { captcha?: string }): Promise<RegisterResult> {
       await new Promise(resolve => setTimeout(resolve, 800))
 
       const existingUser = MOCK_USERS.find(u => u.email === data.email)

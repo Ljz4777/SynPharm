@@ -11,9 +11,10 @@ import static com.synpharm.dto.request.LoginRequest.QQ_EMAIL_REGEX;
  * 注册请求DTO
  *
  * <p>用于接收用户注册请求的参数。
+ * 注册需要提供QQ邮箱验证码，验证码通过 /api/auth/captcha/send 接口获取。
  *
  * @author SynPharm Team
- * @version 1.0.0
+ * @version 2.0.0
  */
 @Data
 public class RegisterRequest {
@@ -32,4 +33,9 @@ public class RegisterRequest {
     @NotBlank(message = "昵称不能为空")
     @Pattern(regexp = "^[\\u4e00-\\u9fa5a-zA-Z0-9_]{2,20}$", message = "昵称长度2-20位，支持中文、字母、数字、下划线")
     private String nickname;
+
+    /** QQ邮箱验证码（6位数字，通过发送验证码接口获取，1分钟内有效） */
+    @NotBlank(message = "验证码不能为空")
+    @Pattern(regexp = "^\\d{6}$", message = "验证码为6位数字")
+    private String captcha;
 }

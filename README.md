@@ -344,9 +344,10 @@ npm run build
 
 | 文档 | 路径 | 说明 |
 | :--- | :--- | :--- |
-| 用户认证模块技术设计文档 | `synpharm-backend/用户认证模块技术设计文档.md` | 认证模块完整设计说明 |
-| 用户认证模块开发指南 | `synpharm-backend/用户认证模块开发指南.md` | 认证模块开发指引 |
-| AI 预测核心模块开发指南 | `synpharm-backend/AI预测核心模块开发指南.md` | 预测模块开发指引 |
+| 用户认证模块技术设计文档 | [synpharm-backend/用户认证模块技术设计文档.md](file:///d:/SynPharm/synpharm-backend/用户认证模块技术设计文档.md) | 认证模块完整设计说明（架构、流程、安全机制） |
+| 用户认证模块开发指南 | [synpharm-backend/用户认证模块开发指南.md](file:///d:/SynPharm/synpharm-backend/用户认证模块开发指南.md) | 认证模块技术实现细节（策略模式、安全机制、扩展方法） |
+| AI 预测核心模块开发指南 | [synpharm-backend/AI预测核心模块开发指南.md](file:///d:/SynPharm/synpharm-backend/AI预测核心模块开发指南.md) | 预测模块设计文档（DTI/PPI/DDI、任务管理、扩展指南） |
+| 代码审查日志 | [log/用户认证模块代码审查日志_20260722.md](file:///d:/SynPharm/log/用户认证模块代码审查日志_20260722.md) | 代码审查报告（问题清单和修复建议） |
 
 ---
 

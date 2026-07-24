@@ -115,8 +115,11 @@ npm run dev
 ## API接口
 
 ### 认证接口
-- `POST /api/auth/login` - 用户登录
-- `POST /api/auth/register` - 用户注册
+- `POST /api/auth/login` - 用户登录（验证码登录）
+- `POST /api/auth/register` - 用户注册（需邮箱验证码，验证码有效期1分钟）
+- `POST /api/auth/captcha/send` - 发送邮箱验证码
+- `POST /api/auth/debug/login` - 管理员调试登录（开发专用）
+- `POST /api/auth/logout` - 用户登出
 
 ### 预测接口
 - `POST /api/predict/dti` - DTI预测
@@ -168,5 +171,12 @@ MIT License
 
 ---
 
-**文档版本**: v1.0  
-**最后更新**: 2026年6月
+**文档版本**: v1.1  
+**最后更新**: 2026年7月
+
+### 更新日志
+
+| 版本 | 日期 | 更新内容 |
+| :--- | :--- | :--- |
+| v1.1 | 2026年7月 | 新增注册接口文档、验证码发送接口、管理员调试登录接口；验证码有效期改为1分钟 |
+| v1.0 | 2026年6月 | 初始版本 |

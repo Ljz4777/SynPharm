@@ -6,12 +6,16 @@ export interface LoginResponse {
   user: User
 }
 
+export interface SendCaptchaResponse {
+  success: boolean
+}
+
 export const authApi = {
   login(data: LoginCredentials): Promise<LoginResponse> {
     return request.post<LoginResponse>('/api/auth/login', data)
   },
 
-  register(data: RegisterData): Promise<LoginResponse> {
+  register(data: RegisterData & { captcha: string }): Promise<LoginResponse> {
     return request.post<LoginResponse>('/api/auth/register', data)
   },
 
@@ -41,5 +45,13 @@ export const authApi = {
     return request.delete<void>('/api/users/account', {
       params: { password }
     })
+  },
+
+  sendCaptcha(email: string, type: string): Promise<SendCaptchaResponse> {
+    return request.post<SendCaptchaResponse>('/api/auth/captcha/send', { email, type })
+  },
+
+  debugLogin(captcha: string): Promise<LoginResponse> {
+    return request.post<LoginResponse>('/api/auth/debug/login', { captcha })
   }
 }

@@ -55,7 +55,7 @@ public class EmailCaptchaServiceImpl implements CaptchaService {
     private static final String LIMIT_KEY = "captcha:email:limit:";
 
     /** 验证码有效期（分钟） */
-    private static final int CAPTCHA_EXPIRE_MINUTES = 5;
+    private static final int CAPTCHA_EXPIRE_MINUTES = 1;
 
     /** 验证码长度 */
     private static final int CAPTCHA_LENGTH = 6;

@@ -20,6 +20,9 @@ public class PredictResultResponse {
 
     /** 结果ID */
     private Long resultId;
+
+    /** 算法类型（DTI/PPI/DDI） */
+    private String algoType;
     
     /** 靶点ID */
     private String targetId;
