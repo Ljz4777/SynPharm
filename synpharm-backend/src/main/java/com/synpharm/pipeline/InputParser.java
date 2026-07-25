@@ -1,9 +1,9 @@
 package com.synpharm.pipeline;
 
-import com.synpharm.enums.AlgoType;
+import com.synpharm.dto.ParsedInput;
 import com.synpharm.enums.InputType;
 
-public interface InputParser<T> {
+public interface InputParser {
     InputType getInputType();
-    T parse(String inputValue, String fileUrl, AlgoType algoType);
+    ParsedInput parse(String inputValue, String fileUrl);
 }

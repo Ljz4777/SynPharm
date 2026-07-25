@@ -1,14 +1,13 @@
 package com.synpharm.service.impl;
 
-import com.synpharm.client.FastApiClient;
-import com.synpharm.dto.request.PredictRequest;
-import com.synpharm.dto.response.BatchPredictionResponse;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.synpharm.dto.response.BatchStatusResponse;
 import com.synpharm.dto.response.BatchUploadResponse;
 import com.synpharm.dto.response.PredictResultResponse;
 import com.synpharm.exception.BusinessException;
 import com.synpharm.model.entity.BatchTask;
-import com.synpharm.pipeline.DataPipelineFactory;
+import com.synpharm.pipeline.PipelineFactory;
 import com.synpharm.repository.mapper.BatchTaskMapper;
 import com.synpharm.service.BatchProcessService;
 import com.synpharm.utils.CsvUtils;
@@ -17,6 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -29,7 +29,7 @@ import java.io.File;
 import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Service
@@ -37,8 +37,9 @@ import java.util.concurrent.ConcurrentHashMap;
 public class BatchProcessServiceImpl implements BatchProcessService {
 
     private final BatchTaskMapper batchTaskMapper;
-    private final FastApiClient fastApiClient;
-    private final DataPipelineFactory dataPipelineFactory;
+    private final PipelineFactory pipelineFactory;
+    private final StringRedisTemplate redisTemplate;
+    private final ObjectMapper objectMapper;
 
     @Value("${file.upload-dir:./uploads}")
     private String uploadDir;
@@ -48,8 +49,8 @@ public class BatchProcessServiceImpl implements BatchProcessService {
 
     private static final int CHUNK_SIZE = 50;
     private static final int PROGRESS_UPDATE_INTERVAL = 5;
-
-    private final Map<String, BatchTaskProgress> progressCache = new ConcurrentHashMap<>();
+    private static final String PROGRESS_KEY = "batch:progress:";
+    private static final int PROGRESS_EXPIRE_HOURS = 24;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -76,7 +77,7 @@ public class BatchProcessServiceImpl implements BatchProcessService {
             task.setStatus(0);
             batchTaskMapper.insert(task);
 
-            progressCache.put(batchId, new BatchTaskProgress(task));
+            saveProgress(batchId, task);
 
             submitBatchTask(batchId, algoType);
 
@@ -102,38 +103,36 @@ public class BatchProcessServiceImpl implements BatchProcessService {
     public void processBatch(String batchId, String algoType) {
         log.info("开始处理批量任务: {}", batchId);
 
-        BatchTaskProgress progress = progressCache.get(batchId);
-        if (progress == null) {
-            BatchTask task = batchTaskMapper.selectByBatchId(batchId);
+        BatchTask task = getProgress(batchId);
+        if (task == null) {
+            task = batchTaskMapper.selectByBatchId(batchId);
             if (task == null) {
                 log.error("批量任务不存在: {}", batchId);
                 return;
             }
-            progress = new BatchTaskProgress(task);
-            progressCache.put(batchId, progress);
+            saveProgress(batchId, task);
         }
 
-        progress.setStatus(1);
-        batchTaskMapper.updateById(progress.getTask());
+        task.setStatus(1);
+        batchTaskMapper.updateById(task);
+        saveProgress(batchId, task);
 
         List<Map<String, Object>> allResults = new ArrayList<>();
         int chunkCount = 0;
 
         try {
-            List<String> lines = CsvUtils.readLines(progress.getTask().getFilePath());
+            List<String> lines = CsvUtils.readLines(task.getFilePath());
 
+            List<String> chunk = new ArrayList<>();
             for (String line : lines) {
-                try {
-                    PredictRequest request = CsvUtils.parseLine(line, algoType);
-                    if (request != null) {
-                        PredictResultResponse response = dataPipelineFactory.process(
-                                "smiles",
-                                algoType,
-                                "json",
-                                line,
-                                null
-                        );
+                chunk.add(line);
 
+                if (chunk.size() >= CHUNK_SIZE) {
+                    List<PredictResultResponse> responses = pipelineFactory.batchProcess(
+                            "smiles", algoType, "json", chunk
+                    );
+
+                    for (PredictResultResponse response : responses) {
                         Map<String, Object> result = new HashMap<>();
                         result.put("algoType", response.getAlgoType());
                         result.put("targetId", response.getTargetId());
@@ -142,48 +141,65 @@ public class BatchProcessServiceImpl implements BatchProcessService {
                         result.put("confidenceScore", response.getConfidenceScore());
                         result.put("confidenceLevel", response.getConfidenceLevel());
                         allResults.add(result);
-                        progress.addSuccess(1);
                     }
-                } catch (Exception e) {
-                    log.error("处理单行失败: {}", line, e);
-                    progress.addFail(1);
+
+                    task.setSuccessCount(task.getSuccessCount() + chunk.size());
+                    chunk.clear();
+                    chunkCount++;
+
+                    if (chunkCount % PROGRESS_UPDATE_INTERVAL == 0) {
+                        batchTaskMapper.updateById(task);
+                    }
+                    saveProgress(batchId, task);
+                }
+            }
+
+            if (!chunk.isEmpty()) {
+                List<PredictResultResponse> responses = pipelineFactory.batchProcess(
+                        "smiles", algoType, "json", chunk
+                );
+
+                for (PredictResultResponse response : responses) {
+                    Map<String, Object> result = new HashMap<>();
+                    result.put("algoType", response.getAlgoType());
+                    result.put("targetId", response.getTargetId());
+                    result.put("targetName", response.getTargetName());
+                    result.put("bindingAffinity", response.getBindingAffinity());
+                    result.put("confidenceScore", response.getConfidenceScore());
+                    result.put("confidenceLevel", response.getConfidenceLevel());
+                    allResults.add(result);
                 }
 
-                chunkCount++;
-                if (chunkCount % PROGRESS_UPDATE_INTERVAL == 0) {
-                    batchTaskMapper.updateById(progress.getTask());
-                }
+                task.setSuccessCount(task.getSuccessCount() + chunk.size());
+                saveProgress(batchId, task);
             }
 
             String resultPath = resultDir + "/" + batchId + "_result.csv";
             CsvUtils.writeResultFile(resultPath, algoType, allResults);
 
-            progress.setStatus(2);
-            progress.getTask().setResultUrl("/api/batch/download/" + batchId);
-            progress.setProgress(100.0);
-            batchTaskMapper.updateById(progress.getTask());
+            task.setStatus(2);
+            task.setResultUrl("/api/batch/download/" + batchId);
+            task.setProgress(BigDecimal.valueOf(100));
+            batchTaskMapper.updateById(task);
 
-            progressCache.remove(batchId);
+            redisTemplate.delete(PROGRESS_KEY + batchId);
 
             log.info("批量任务处理完成: {}", batchId);
 
         } catch (Exception e) {
             log.error("批量任务处理失败: {}", batchId, e);
-            progress.setStatus(3);
-            progress.getTask().setErrorMsg(e.getMessage());
-            batchTaskMapper.updateById(progress.getTask());
-            progressCache.remove(batchId);
+            task.setStatus(3);
+            task.setErrorMsg(e.getMessage());
+            batchTaskMapper.updateById(task);
+            saveProgress(batchId, task);
         }
     }
 
     @Override
     public BatchStatusResponse getBatchStatus(String batchId) {
-        BatchTaskProgress progress = progressCache.get(batchId);
-        BatchTask task;
+        BatchTask task = getProgress(batchId);
 
-        if (progress != null) {
-            task = progress.getTask();
-        } else {
+        if (task == null) {
             task = batchTaskMapper.selectByBatchId(batchId);
             if (task == null) {
                 throw new BusinessException("批次任务不存在");
@@ -234,39 +250,24 @@ public class BatchProcessServiceImpl implements BatchProcessService {
                 .body(resource);
     }
 
-    private static class BatchTaskProgress {
-        private final BatchTask task;
-
-        public BatchTaskProgress(BatchTask task) {
-            this.task = task;
+    private void saveProgress(String batchId, BatchTask task) {
+        try {
+            String json = objectMapper.writeValueAsString(task);
+            redisTemplate.opsForValue().set(PROGRESS_KEY + batchId, json, PROGRESS_EXPIRE_HOURS, TimeUnit.HOURS);
+        } catch (JsonProcessingException e) {
+            log.error("保存批量任务进度失败: {}", batchId, e);
         }
+    }
 
-        public BatchTask getTask() {
-            return task;
+    private BatchTask getProgress(String batchId) {
+        try {
+            String json = redisTemplate.opsForValue().get(PROGRESS_KEY + batchId);
+            if (json != null) {
+                return objectMapper.readValue(json, BatchTask.class);
+            }
+        } catch (JsonProcessingException e) {
+            log.error("获取批量任务进度失败: {}", batchId, e);
         }
-
-        public void setStatus(int status) {
-            task.setStatus(status);
-        }
-
-        public void addSuccess(int count) {
-            task.setSuccessCount(task.getSuccessCount() + count);
-            updateProgress();
-        }
-
-        public void addFail(int count) {
-            task.setFailCount(task.getFailCount() + count);
-            updateProgress();
-        }
-
-        public void setProgress(double progress) {
-            task.setProgress(BigDecimal.valueOf(progress));
-        }
-
-        private void updateProgress() {
-            int processed = task.getSuccessCount() + task.getFailCount();
-            double progress = (processed * 100.0) / task.getTotalCount();
-            task.setProgress(BigDecimal.valueOf(Math.min(progress, 99.99)));
-        }
+        return null;
     }
 }

@@ -5,7 +5,7 @@ import com.synpharm.dto.request.DTIPredictRequest;
 import com.synpharm.dto.request.GeneralPredictRequest;
 import com.synpharm.dto.request.PPIPredictRequest;
 import com.synpharm.dto.response.PredictResultResponse;
-import com.synpharm.pipeline.DataPipelineFactory;
+import com.synpharm.pipeline.PipelineFactory;
 import com.synpharm.service.PredictService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -16,45 +16,42 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class PredictServiceImpl implements PredictService {
 
-    private final DataPipelineFactory dataPipelineFactory;
+    private final PipelineFactory pipelineFactory;
 
     @Override
+    @Deprecated
     public PredictResultResponse predictDTI(DTIPredictRequest request, Long userId) {
-        log.info("DTI预测请求: userId={}, smiles={}, targetId={}", userId, request.getSmiles(), request.getTargetId());
-        
-        return dataPipelineFactory.process(
-                "smiles",
-                "DTI",
-                "json",
-                request.getSmiles() + "," + request.getTargetId(),
-                null
-        );
+        log.warn("已废弃的方法 predictDTI，请使用通用预测接口 predict()");
+        return predict(GeneralPredictRequest.builder()
+                .inputType("smiles")
+                .algoType("DTI")
+                .outputType("json")
+                .inputValue(request.getSmiles() + "," + request.getTargetId())
+                .build(), userId);
     }
 
     @Override
+    @Deprecated
     public PredictResultResponse predictPPI(PPIPredictRequest request, Long userId) {
-        log.info("PPI预测请求: userId={}", userId);
-        
-        return dataPipelineFactory.process(
-                "smiles",
-                "PPI",
-                "json",
-                request.getProteinA() + "," + request.getProteinB(),
-                null
-        );
+        log.warn("已废弃的方法 predictPPI，请使用通用预测接口 predict()");
+        return predict(GeneralPredictRequest.builder()
+                .inputType("smiles")
+                .algoType("PPI")
+                .outputType("json")
+                .inputValue(request.getProteinA() + "," + request.getProteinB())
+                .build(), userId);
     }
 
     @Override
+    @Deprecated
     public PredictResultResponse predictDDI(DDIPredictRequest request, Long userId) {
-        log.info("DDI预测请求: userId={}", userId);
-        
-        return dataPipelineFactory.process(
-                "smiles",
-                "DDI",
-                "json",
-                request.getDrugA() + "," + request.getDrugB(),
-                null
-        );
+        log.warn("已废弃的方法 predictDDI，请使用通用预测接口 predict()");
+        return predict(GeneralPredictRequest.builder()
+                .inputType("smiles")
+                .algoType("DDI")
+                .outputType("json")
+                .inputValue(request.getDrugA() + "," + request.getDrugB())
+                .build(), userId);
     }
 
     @Override
@@ -62,7 +59,7 @@ public class PredictServiceImpl implements PredictService {
         log.info("通用预测请求: userId={}, inputType={}, algoType={}, outputType={}", 
                 userId, request.getInputType(), request.getAlgoType(), request.getOutputType());
         
-        return dataPipelineFactory.process(
+        return pipelineFactory.process(
                 request.getInputType(),
                 request.getAlgoType(),
                 request.getOutputType(),

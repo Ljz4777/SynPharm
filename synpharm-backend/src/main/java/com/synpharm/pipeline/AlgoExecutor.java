@@ -1,8 +1,11 @@
 package com.synpharm.pipeline;
 
+import com.synpharm.dto.ParsedInput;
+import com.synpharm.dto.response.AlgoResponse;
 import com.synpharm.enums.AlgoType;
 
-public interface AlgoExecutor<I, O> {
+public interface AlgoExecutor {
     AlgoType getAlgoType();
-    O execute(I inputData);
+    AlgoResponse execute(ParsedInput inputData);
+    List<AlgoResponse> batchExecute(List<ParsedInput> inputDataList);
 }

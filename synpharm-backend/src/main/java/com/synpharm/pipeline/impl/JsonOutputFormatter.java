@@ -12,7 +12,7 @@ import java.util.List;
 
 @Slf4j
 @Component
-public class JsonOutputFormatter implements OutputFormatter<AlgoResponse, PredictResultResponse> {
+public class JsonOutputFormatter implements OutputFormatter {
 
     @Override
     public OutputType getOutputType() {
@@ -27,6 +27,25 @@ public class JsonOutputFormatter implements OutputFormatter<AlgoResponse, Predic
         
         log.debug("格式化JSON输出: status={}, algoType={}", response.getStatus(), response.getAlgoType());
         
+        return buildResponse(response);
+    }
+
+    @Override
+    public List<PredictResultResponse> batchFormat(List<AlgoResponse> resultDataList) {
+        log.debug("批量格式化JSON输出: 数量={}", resultDataList.size());
+        
+        List<PredictResultResponse> responses = new ArrayList<>();
+        for (AlgoResponse response : resultDataList) {
+            try {
+                responses.add(buildResponse(response));
+            } catch (Exception e) {
+                log.warn("格式化单个结果失败", e);
+            }
+        }
+        return responses;
+    }
+
+    private PredictResultResponse buildResponse(AlgoResponse response) {
         var metrics = response.getMetrics();
         List<PredictResultResponse.InteractionInfo> interactions = new ArrayList<>();
         

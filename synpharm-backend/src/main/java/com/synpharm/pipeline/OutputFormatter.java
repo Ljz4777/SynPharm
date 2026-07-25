@@ -1,8 +1,13 @@
 package com.synpharm.pipeline;
 
+import com.synpharm.dto.response.AlgoResponse;
+import com.synpharm.dto.response.PredictResultResponse;
 import com.synpharm.enums.OutputType;
 
-public interface OutputFormatter<I, O> {
+import java.util.List;
+
+public interface OutputFormatter {
     OutputType getOutputType();
-    O format(I resultData);
+    PredictResultResponse format(AlgoResponse resultData);
+    List<PredictResultResponse> batchFormat(List<AlgoResponse> resultDataList);
 }
