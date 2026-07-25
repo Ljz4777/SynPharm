@@ -1,5 +1,5 @@
 import { request } from '@/utils/request'
-import type { LoginCredentials, RegisterData, User } from '@/types'
+import type { LoginCredentials, User } from '@/types'
 
 export interface LoginResponse {
   token: string
@@ -13,14 +13,6 @@ export interface SendCaptchaResponse {
 export const authApi = {
   login(data: LoginCredentials): Promise<LoginResponse> {
     return request.post<LoginResponse>('/api/auth/login', data)
-  },
-
-  register(data: RegisterData & { captcha: string }): Promise<LoginResponse> {
-    return request.post<LoginResponse>('/api/auth/register', data)
-  },
-
-  guestLogin(): Promise<LoginResponse> {
-    return request.post<LoginResponse>('/api/auth/guest')
   },
 
   logout(): Promise<void> {
@@ -47,8 +39,12 @@ export const authApi = {
     })
   },
 
-  sendCaptcha(email: string, type: string): Promise<SendCaptchaResponse> {
+  sendCaptcha(email: string, type: 'login' | 'reset'): Promise<SendCaptchaResponse> {
     return request.post<SendCaptchaResponse>('/api/auth/captcha/send', { email, type })
+  },
+
+  resetPassword(email: string, captcha: string, newPassword: string): Promise<void> {
+    return request.post<void>('/api/auth/password/reset', { email, captcha, newPassword })
   },
 
   debugLogin(captcha: string): Promise<LoginResponse> {

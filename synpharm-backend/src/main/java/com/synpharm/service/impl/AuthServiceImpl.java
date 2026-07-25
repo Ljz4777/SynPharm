@@ -1,9 +1,7 @@
 package com.synpharm.service.impl;
 
 import com.synpharm.dto.request.LoginRequest;
-import com.synpharm.dto.request.RegisterRequest;
 import com.synpharm.dto.response.LoginResponse;
-import com.synpharm.dto.response.UserResponse;
 import com.synpharm.exception.BusinessException;
 import com.synpharm.exception.ErrorCode;
 import com.synpharm.model.entity.SysLoginLog;
@@ -26,99 +24,43 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.concurrent.TimeUnit;
 
-/**
- * 认证服务实现
- *
- * <p>作为登录的总入口，负责：
- * <ol>
- *   <li>登录限流检查</li>
- *   <li>委托给具体的登录策略执行</li>
- *   <li>登录日志记录</li>
- *   <li>登出处理（Token黑名单）</li>
- *   <li>用户注册（带QQ邮箱验证码验证）</li>
- * </ol>
- *
- * <p>设计原则：
- * <ul>
- *   <li>不关心具体的登录逻辑，只做公共的事情</li>
- *   <li>具体登录逻辑委托给 LoginStrategy</li>
- *   <li>新增登录方式不用改这个类</li>
- * </ul>
- *
- * @author SynPharm Team
- * @version 2.1.0
- */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
 
-    /** 登录策略工厂（核心：通过策略模式支持多种登录方式） */
     private final LoginStrategyFactory loginStrategyFactory;
-
-    /** JWT工具类 */
     private final JwtUtils jwtUtils;
-
-    /** Redis操作 */
     private final StringRedisTemplate redisTemplate;
-
-    /** 登录日志Mapper */
     private final SysLoginLogMapper loginLogMapper;
-
-    /** 用户Mapper */
     private final SysUserMapper userMapper;
-
-    /** 验证码服务 */
     private final CaptchaService captchaService;
-
-    /** BCrypt密码编码器 */
     private final BCryptPasswordEncoder passwordEncoder;
 
-    /** Redis Key前缀（统一定义，避免魔法值） */
     private static final String LOGIN_FAIL_KEY = "login:fail:";
     private static final String LOGIN_LOCK_KEY = "login:lock:";
     private static final String TOKEN_BLACKLIST_KEY = "token:blacklist:";
 
-    /** 登录失败阈值 */
     private static final int MAX_LOGIN_FAIL_COUNT = 5;
-
-    /** 锁定时长（分钟） */
     private static final int LOCK_DURATION_MINUTES = 15;
 
-    /**
-     * 登录总入口
-     *
-     * <p>流程：
-     * <ol>
-     *   <li>检查账户是否被锁定</li>
-     *   <li>委托给策略工厂执行具体登录逻辑</li>
-     *   <li>登录成功→清除失败计数</li>
-     *   <li>登录失败→增加失败计数</li>
-     *   <li>记录登录日志</li>
-     * </ol>
-     */
     @Override
     public LoginResponse login(LoginRequest request, HttpServletRequest httpRequest) {
-        // 获取登录账号（不同登录方式账号字段不同）
         String account = getAccount(request);
         String ip = IpUtils.getClientIp(httpRequest);
         String userAgent = httpRequest.getHeader("User-Agent");
 
         try {
-            // ========== 第一步：检查登录锁定 ==========
             checkLoginLock(account);
 
-            // ========== 第二步：执行具体登录逻辑（策略模式） ==========
             LoginResponse response = loginStrategyFactory.login(
                     request.getLoginType(),
                     request,
                     httpRequest
             );
 
-            // ========== 第三步：登录成功，清除失败计数 ==========
             clearLoginFailCount(account);
 
-            // ========== 第四步：记录成功日志 ==========
             saveLoginLog(response.getUser().getId(), account, request.getLoginType(),
                     ip, userAgent, 1, null, getCaptchaType(request.getLoginType()));
 
@@ -126,25 +68,40 @@ public class AuthServiceImpl implements AuthService {
             return response;
 
         } catch (BusinessException e) {
-            // ========== 登录失败处理 ==========
             handleLoginFail(account, ip, userAgent, request.getLoginType(), e.getMessage(),
                     getCaptchaType(request.getLoginType()));
             throw e;
         }
     }
 
-    /**
-     * 用户登出
-     * <p>将Token的jti加入黑名单，验证时会检查。TTL设为Token剩余有效期，到期自动删除。
-     * 使用jti而非完整Token作为Key，节省Redis内存。
-     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void resetPassword(String email, String captcha, String newPassword) {
+        boolean captchaValid = captchaService.verifyCaptcha(email, captcha, "reset");
+        if (!captchaValid) {
+            log.warn("忘记密码验证码校验失败, email: {}", email);
+            throw new BusinessException(ErrorCode.CAPTCHA_ERROR, "验证码错误或已过期");
+        }
+
+        SysUser user = userMapper.selectByEmail(email);
+        if (user == null) {
+            log.warn("忘记密码-用户不存在, email: {}", email);
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "该邮箱未注册");
+        }
+
+        user.setPassword(passwordEncoder.encode(newPassword));
+        user.setUpdatedAt(LocalDateTime.now());
+        userMapper.updateById(user);
+
+        log.info("忘记密码-密码重置成功, email: {}", email);
+    }
+
     @Override
     public void logout(String token) {
         if (token == null || token.isEmpty()) {
             return;
         }
         try {
-            // 从Token中解析jti作为黑名单Key（比用完整Token省内存）
             String jti = jwtUtils.getJtiFromToken(token);
             if (jti == null) {
                 return;
@@ -160,98 +117,23 @@ public class AuthServiceImpl implements AuthService {
                 log.info("Token已加入黑名单, jti: {}", jti);
             }
         } catch (Exception e) {
-            // Token解析失败也没关系，说明Token本来就无效
             log.warn("Token加入黑名单失败: {}", e.getMessage());
         }
     }
 
-    /**
-     * 用户注册
-     * <p>流程：
-     * <ol>
-     *   <li>验证邮箱验证码</li>
-     *   <li>检查邮箱是否已注册</li>
-     *   <li>创建用户（密码BCrypt加密）</li>
-     *   <li>生成JWT Token</li>
-     *   <li>记录登录日志</li>
-     * </ol>
-     */
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public LoginResponse register(RegisterRequest request, HttpServletRequest httpRequest) {
-        String email = request.getEmail();
-        String ip = IpUtils.getClientIp(httpRequest);
-        String userAgent = httpRequest.getHeader("User-Agent");
-
-        // ========== 第一步：验证邮箱验证码 ==========
-        boolean captchaValid = captchaService.verifyCaptcha(email, request.getCaptcha(), "register");
-        if (!captchaValid) {
-            log.warn("验证码验证失败, email: {}", email);
-            throw new BusinessException(ErrorCode.CAPTCHA_ERROR, "验证码错误或已过期");
-        }
-
-        // ========== 第二步：检查邮箱是否已注册 ==========
-        SysUser existingUser = userMapper.selectByEmail(email);
-        if (existingUser != null) {
-            log.warn("邮箱已被注册, email: {}", email);
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "该邮箱已被注册");
-        }
-
-        // ========== 第三步：创建用户 ==========
-        try {
-            SysUser user = new SysUser();
-            user.setEmail(email);
-            user.setPassword(passwordEncoder.encode(request.getPassword()));
-            user.setNickname(request.getNickname());
-            user.setRegisterType("qq_email");
-            user.setCreatedAt(LocalDateTime.now());
-            user.setUpdatedAt(LocalDateTime.now());
-
-            userMapper.insert(user);
-            log.info("用户注册成功, email: {}", email);
-
-            // ========== 第四步：生成Token并返回 ==========
-            String token = jwtUtils.generateToken(user.getId(), user.getEmail());
-            long expiresIn = jwtUtils.getExpiration();
-
-            // ========== 第五步：记录登录日志 ==========
-            saveLoginLog(user.getId(), email, "register", ip, userAgent, 1, null, "email");
-
-            return LoginResponse.builder()
-                    .accessToken(token)
-                    .tokenType("Bearer")
-                    .expiresIn(expiresIn)
-                    .isNewUser(true)
-                    .user(UserResponse.fromEntity(user))
-                    .build();
-
-        } catch (Exception e) {
-            log.error("用户注册失败, email: {}", email, e);
-            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "注册失败，请重试");
-        }
-    }
-
-    // ==================== 私有辅助方法 ====================
-
-    /**
-     * 从登录请求中获取账号标识（不同登录方式的账号字段不同）
-     *
-     * @throws BusinessException 如果邮箱和手机号都为空，说明请求非法
-     */
     private String getAccount(LoginRequest request) {
+        if ("guest".equals(request.getLoginType())) {
+            return "guest";
+        }
         if (request.getEmail() != null && !request.getEmail().isBlank()) {
             return request.getEmail();
         }
         if (request.getPhone() != null && !request.getPhone().isBlank()) {
             return request.getPhone();
         }
-        // 无法获取账号说明请求非法，直接拒绝
         throw new BusinessException(ErrorCode.BAD_REQUEST, "无法获取登录账号");
     }
 
-    /**
-     * 根据登录类型获取验证码类型
-     */
     private String getCaptchaType(String loginType) {
         return switch (loginType) {
             case "qq_email" -> "email";
@@ -260,10 +142,10 @@ public class AuthServiceImpl implements AuthService {
         };
     }
 
-    /**
-     * 检查账户是否被锁定
-     */
     private void checkLoginLock(String account) {
+        if ("guest".equals(account)) {
+            return;
+        }
         String lockKey = LOGIN_LOCK_KEY + account;
         Boolean locked = redisTemplate.hasKey(lockKey);
         if (Boolean.TRUE.equals(locked)) {
@@ -274,22 +156,18 @@ public class AuthServiceImpl implements AuthService {
         }
     }
 
-    /**
-     * 处理登录失败（原子递增失败计数，达到阈值则锁定）
-     */
     private void handleLoginFail(String account, String ip, String userAgent,
                                  String loginType, String reason, String captchaType) {
+        if ("guest".equals(account)) {
+            return;
+        }
         String failKey = LOGIN_FAIL_KEY + account;
-
-        // 原子递增失败计数
         Long failCount = redisTemplate.opsForValue().increment(failKey);
 
-        // 第一次失败时设置过期时间（15分钟后重置）
         if (failCount != null && failCount == 1) {
             redisTemplate.expire(failKey, LOCK_DURATION_MINUTES, TimeUnit.MINUTES);
         }
 
-        // 达到阈值，锁定账户
         if (failCount != null && failCount >= MAX_LOGIN_FAIL_COUNT) {
             redisTemplate.opsForValue().set(
                     LOGIN_LOCK_KEY + account,
@@ -300,22 +178,17 @@ public class AuthServiceImpl implements AuthService {
             log.warn("账户连续登录失败{}次，已锁定, account: {}", failCount, account);
         }
 
-        // 记录失败日志
         saveLoginLog(null, account, loginType, ip, userAgent, 0, reason, captchaType);
     }
 
-    /**
-     * 清除登录失败计数（登录成功后调用）
-     */
     private void clearLoginFailCount(String account) {
+        if ("guest".equals(account)) {
+            return;
+        }
         redisTemplate.delete(LOGIN_FAIL_KEY + account);
         redisTemplate.delete(LOGIN_LOCK_KEY + account);
     }
 
-    /**
-     * 记录登录日志
-     * <p>记录失败不影响主流程，即使日志记录失败，登录也应该成功。
-     */
     private void saveLoginLog(Long userId, String account, String loginType,
                               String ip, String userAgent, Integer status,
                               String failReason, String captchaType) {
@@ -331,7 +204,6 @@ public class AuthServiceImpl implements AuthService {
             logEntity.setFailReason(failReason);
             loginLogMapper.insert(logEntity);
         } catch (Exception e) {
-            // 日志记录失败不影响主流程，只打印错误
             log.error("记录登录日志失败: {}", e.getMessage());
         }
     }

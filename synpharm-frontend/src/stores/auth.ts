@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import type { User, LoginCredentials, RegisterData, LoginResult, RegisterResult } from '@/types'
+import type { User, LoginCredentials, LoginResult } from '@/types'
 import { authApi } from '@/api/auth'
 
 export interface SendCaptchaResult {
@@ -60,7 +60,6 @@ export const useAuthStore = defineStore('auth', {
           this.isLoggedIn = true
           this.isGuest = storedIsGuest === 'true' || false
         } catch {
-          // localStorage 数据损坏，清除后重置状态
           localStorage.removeItem(STORAGE_KEY.USER)
           localStorage.removeItem(STORAGE_KEY.TOKEN)
           localStorage.removeItem(STORAGE_KEY.IS_GUEST)
@@ -78,11 +77,11 @@ export const useAuthStore = defineStore('auth', {
         this.user = response.user
         this.token = response.token
         this.isLoggedIn = true
-        this.isGuest = false
+        this.isGuest = credentials.loginType === 'guest'
 
         localStorage.setItem(STORAGE_KEY.USER, JSON.stringify(response.user))
         localStorage.setItem(STORAGE_KEY.TOKEN, response.token)
-        localStorage.setItem(STORAGE_KEY.IS_GUEST, 'false')
+        localStorage.setItem(STORAGE_KEY.IS_GUEST, String(credentials.loginType === 'guest'))
 
         return {
           success: true,
@@ -102,8 +101,33 @@ export const useAuthStore = defineStore('auth', {
     async mockLogin(credentials: LoginCredentials): Promise<LoginResult> {
       await new Promise(resolve => setTimeout(resolve, 800))
 
+      if (credentials.loginType === 'guest') {
+        const guestUser: User = {
+          id: 'guest_user_' + Date.now(),
+          email: 'guest_' + Date.now() + '@guest.local',
+          nickname: '游客_' + (Date.now() % 10000),
+          createdAt: new Date().toISOString()
+        }
+        const token = 'guest_token_' + Date.now()
+        this.user = guestUser
+        this.token = token
+        this.isLoggedIn = true
+        this.isGuest = true
+
+        localStorage.setItem(STORAGE_KEY.USER, JSON.stringify(guestUser))
+        localStorage.setItem(STORAGE_KEY.TOKEN, token)
+        localStorage.setItem(STORAGE_KEY.IS_GUEST, 'true')
+
+        return {
+          success: true,
+          message: '游客登录成功',
+          user: guestUser,
+          token
+        }
+      }
+
       const mockUser = MOCK_USERS.find(
-        u => u.email === credentials.email && u.password === credentials.password
+        u => u.email === credentials.email
       )
 
       if (mockUser) {
@@ -127,41 +151,11 @@ export const useAuthStore = defineStore('auth', {
 
       return {
         success: false,
-        message: '邮箱或密码错误'
+        message: '邮箱或验证码错误'
       }
     },
 
-    async register(data: RegisterData & { captcha: string }): Promise<RegisterResult> {
-      if (USE_MOCK) {
-        return this.mockRegister(data)
-      }
-      
-      try {
-        const response = await authApi.register(data)
-        this.user = response.user
-        this.token = response.token
-        this.isLoggedIn = true
-        this.isGuest = false
-
-        localStorage.setItem(STORAGE_KEY.USER, JSON.stringify(response.user))
-        localStorage.setItem(STORAGE_KEY.TOKEN, response.token)
-        localStorage.setItem(STORAGE_KEY.IS_GUEST, 'false')
-
-        return {
-          success: true,
-          message: '注册成功',
-          user: response.user
-        }
-      } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : '注册失败'
-        return {
-          success: false,
-          message
-        }
-      }
-    },
-
-    async sendCaptcha(email: string, type: string): Promise<SendCaptchaResult> {
+    async sendCaptcha(email: string, type: 'login' | 'reset'): Promise<SendCaptchaResult> {
       if (USE_MOCK) {
         await new Promise(resolve => setTimeout(resolve, 500))
         return {
@@ -185,111 +179,28 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
-    async mockRegister(data: RegisterData & { captcha?: string }): Promise<RegisterResult> {
-      await new Promise(resolve => setTimeout(resolve, 800))
-
-      const existingUser = MOCK_USERS.find(u => u.email === data.email)
-      if (existingUser) {
-        return {
-          success: false,
-          message: '该邮箱已被注册'
-        }
-      }
-
-      if (data.password !== data.confirmPassword) {
-        return {
-          success: false,
-          message: '两次输入的密码不一致'
-        }
-      }
-
-      if (data.password.length < 8) {
-        return {
-          success: false,
-          message: '密码长度不少于8位'
-        }
-      }
-
-      if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(data.password)) {
-        return {
-          success: false,
-          message: '密码必须包含大小写字母和数字'
-        }
-      }
-
-      const newUser: User = {
-        id: generateId(),
-        email: data.email,
-        nickname: data.nickname || data.email.split('@')[0],
-        createdAt: new Date().toISOString()
-      }
-
-      MOCK_USERS.push({
-        email: data.email,
-        password: data.password,
-        user: newUser
-      })
-
-      return {
-        success: true,
-        message: '注册成功',
-        user: newUser
-      }
-    },
-
-    async guestLogin(): Promise<LoginResult> {
+    async resetPassword(email: string, captcha: string, newPassword: string): Promise<SendCaptchaResult> {
       if (USE_MOCK) {
-        const guestUser: User = {
-          id: 'guest_user',
-          email: 'guest@example.com',
-          nickname: '游客',
-          createdAt: new Date().toISOString()
-        }
-        this.setGuestUser(guestUser)
+        await new Promise(resolve => setTimeout(resolve, 500))
         return {
           success: true,
-          message: '游客登录成功',
-          user: guestUser,
-          token: 'guest_token_' + Date.now()
+          message: '密码重置成功'
         }
       }
       
       try {
-        const response = await authApi.guestLogin()
-        this.user = response.user
-        this.token = response.token
-        this.isLoggedIn = true
-        this.isGuest = true
-
-        localStorage.setItem(STORAGE_KEY.USER, JSON.stringify(response.user))
-        localStorage.setItem(STORAGE_KEY.TOKEN, response.token)
-        localStorage.setItem(STORAGE_KEY.IS_GUEST, 'true')
-
+        await authApi.resetPassword(email, captcha, newPassword)
         return {
           success: true,
-          message: '游客登录成功',
-          user: response.user,
-          token: response.token
+          message: '密码重置成功'
         }
       } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : '游客登录失败'
+        const message = error instanceof Error ? error.message : '重置失败'
         return {
           success: false,
           message
         }
       }
-    },
-
-    setGuestUser(user: User) {
-      const token = 'guest_token_' + Date.now()
-      this.user = user
-      this.token = token
-      this.isLoggedIn = true
-      this.isGuest = true
-
-      localStorage.setItem(STORAGE_KEY.USER, JSON.stringify(user))
-      localStorage.setItem(STORAGE_KEY.TOKEN, token)
-      localStorage.setItem(STORAGE_KEY.IS_GUEST, 'true')
     },
 
     async logout() {

@@ -53,21 +53,29 @@
           </div>
           
           <div class="login__form-group">
-            <label class="login__form-label">密码</label>
-            <div class="login__input-wrapper">
-              <span class="login__input-icon">🔒</span>
+            <label class="login__form-label">验证码</label>
+            <div class="login__input-wrapper login__input-wrapper--captcha">
+              <span class="login__input-icon">🔑</span>
               <input 
-                v-model="password"
-                type="password"
-                autocomplete="current-password"
-                class="login__form-input"
-                :class="{ 'login__form-input--error': errors.password }"
-                placeholder="请输入密码"
-                @blur="validatePasswordField"
-                @input="errors.password && validatePasswordField()"
+                v-model="captcha"
+                type="text"
+                maxlength="6"
+                class="login__form-input login__form-input--captcha"
+                :class="{ 'login__form-input--error': errors.captcha }"
+                placeholder="请输入6位验证码"
+                @blur="validateCaptcha"
+                @input="errors.captcha && validateCaptcha()"
               />
+              <button 
+                type="button"
+                class="login__captcha-btn"
+                :disabled="isCaptchaSending || captchaCountdown > 0"
+                @click="handleSendCaptcha"
+              >
+                {{ captchaCountdown > 0 ? `${captchaCountdown}s` : '获取验证码' }}
+              </button>
             </div>
-            <span v-if="errors.password" class="login__form-error">{{ errors.password }}</span>
+            <span v-if="errors.captcha" class="login__form-error">{{ errors.captcha }}</span>
           </div>
           
           <div class="login__form-group login__form-group--remember">
@@ -80,7 +88,11 @@
               <span class="login__checkbox-checkmark"></span>
               <span>记住我</span>
             </label>
-            <a href="#" class="login__form-link">忘记密码?</a>
+            <button 
+              type="button"
+              class="login__form-link"
+              @click="showResetModal = true"
+            >忘记密码?</button>
           </div>
           
           <button 
@@ -108,34 +120,94 @@
         <div v-if="loginError" class="login__form-message login__form-message--error">
           {{ loginError }}
         </div>
-        
-        <p class="login__form-footer">
-          还没有账户? 
-          <router-link to="/register" class="login__form-link">立即注册</router-link>
-        </p>
+      </div>
+    </div>
+
+    <div v-if="showResetModal" class="login__modal-overlay" @click.self="showResetModal = false">
+      <div class="login__modal">
+        <h4 class="login__modal-title">忘记密码</h4>
+        <div class="login__modal-form">
+          <div class="login__form-group">
+            <label class="login__form-label">QQ邮箱</label>
+            <input 
+              v-model="resetEmail"
+              type="email"
+              class="login__form-input"
+              placeholder="请输入注册邮箱"
+            />
+          </div>
+          <div class="login__form-group">
+            <label class="login__form-label">验证码</label>
+            <div class="login__input-wrapper login__input-wrapper--captcha">
+              <input 
+                v-model="resetCaptcha"
+                type="text"
+                maxlength="6"
+                class="login__form-input login__form-input--captcha"
+                placeholder="请输入验证码"
+              />
+              <button 
+                type="button"
+                class="login__captcha-btn"
+                :disabled="resetCaptchaCountdown > 0"
+                @click="handleSendResetCaptcha"
+              >
+                {{ resetCaptchaCountdown > 0 ? `${resetCaptchaCountdown}s` : '获取验证码' }}
+              </button>
+            </div>
+          </div>
+          <div class="login__form-group">
+            <label class="login__form-label">新密码</label>
+            <input 
+              v-model="resetPassword"
+              type="password"
+              class="login__form-input"
+              placeholder="请输入新密码"
+            />
+          </div>
+        </div>
+        <div v-if="resetError" class="login__form-message login__form-message--error">
+          {{ resetError }}
+        </div>
+        <div class="login__modal-actions">
+          <button class="login__modal-btn login__modal-btn--cancel" @click="showResetModal = false">取消</button>
+          <button class="login__modal-btn" @click="handleResetPassword">确认重置</button>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, onUnmounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useRouter } from 'vue-router'
-import { validateQqEmail, validatePassword } from '@/utils/validators'
+import { validateQqEmail } from '@/utils/validators'
 
 const authStore = useAuthStore()
 const router = useRouter()
 
 const email = ref('')
-const password = ref('')
+const captcha = ref('')
 const rememberMe = ref(false)
 const isLoading = ref(false)
 const loginError = ref('')
 
+const isCaptchaSending = ref(false)
+const captchaCountdown = ref(0)
+let captchaTimer: number | null = null
+
+const showResetModal = ref(false)
+const resetEmail = ref('')
+const resetCaptcha = ref('')
+const resetPassword = ref('')
+const resetError = ref('')
+const resetCaptchaCountdown = ref(0)
+let resetCaptchaTimer: number | null = null
+
 const errors = reactive({
   email: '',
-  password: ''
+  captcha: ''
 })
 
 const validateEmail = (): boolean => {
@@ -144,16 +216,23 @@ const validateEmail = (): boolean => {
   return result.valid
 }
 
-const validatePasswordField = (): boolean => {
-  const result = validatePassword(password.value)
-  errors.password = result.valid ? '' : result.message
-  return result.valid
+const validateCaptcha = (): boolean => {
+  if (!captcha.value.trim()) {
+    errors.captcha = '验证码不能为空'
+    return false
+  }
+  if (!/^\d{6}$/.test(captcha.value)) {
+    errors.captcha = '验证码为6位数字'
+    return false
+  }
+  errors.captcha = ''
+  return true
 }
 
 const validateForm = (): boolean => {
   const emailValid = validateEmail()
-  const passwordValid = validatePasswordField()
-  return emailValid && passwordValid
+  const captchaValid = validateCaptcha()
+  return emailValid && captchaValid
 }
 
 const handleLogin = async () => {
@@ -163,8 +242,9 @@ const handleLogin = async () => {
   loginError.value = ''
   
   const result = await authStore.login({
+    loginType: 'qq_email',
     email: email.value.trim(),
-    password: password.value
+    captcha: captcha.value
   })
   
   if (result.success) {
@@ -177,11 +257,79 @@ const handleLogin = async () => {
 }
 
 const handleGuestLogin = async () => {
-  const result = await authStore.guestLogin()
+  const result = await authStore.login({
+    loginType: 'guest'
+  })
   if (result.success) {
     router.push('/dashboard')
   }
 }
+
+const handleSendCaptcha = async () => {
+  if (!validateEmail()) return
+  
+  isCaptchaSending.value = true
+  const result = await authStore.sendCaptcha(email.value.trim(), 'login')
+  isCaptchaSending.value = false
+  
+  if (result.success) {
+    captchaCountdown.value = 60
+    captchaTimer = window.setInterval(() => {
+      captchaCountdown.value--
+      if (captchaCountdown.value <= 0) {
+        if (captchaTimer) clearInterval(captchaTimer)
+      }
+    }, 1000)
+  } else {
+    loginError.value = result.message
+  }
+}
+
+const handleSendResetCaptcha = async () => {
+  if (!resetEmail.value) return
+  
+  const result = await authStore.sendCaptcha(resetEmail.value.trim(), 'reset')
+  if (result.success) {
+    resetCaptchaCountdown.value = 60
+    resetCaptchaTimer = window.setInterval(() => {
+      resetCaptchaCountdown.value--
+      if (resetCaptchaCountdown.value <= 0) {
+        if (resetCaptchaTimer) clearInterval(resetCaptchaTimer)
+      }
+    }, 1000)
+  } else {
+    resetError.value = result.message
+  }
+}
+
+const handleResetPassword = async () => {
+  if (!resetEmail.value || !resetCaptcha.value || !resetPassword.value) {
+    resetError.value = '请填写完整信息'
+    return
+  }
+  
+  const result = await authStore.resetPassword(
+    resetEmail.value.trim(),
+    resetCaptcha.value,
+    resetPassword.value
+  )
+  
+  if (result.success) {
+    showResetModal.value = false
+    resetEmail.value = ''
+    resetCaptcha.value = ''
+    resetPassword.value = ''
+    resetError.value = ''
+    loginError.value = '密码重置成功，请登录'
+  } else {
+    resetError.value = result.message
+  }
+}
+
+onUnmounted(() => {
+  if (captchaTimer) clearInterval(captchaTimer)
+  if (resetCaptchaTimer) clearInterval(resetCaptchaTimer)
+})
 </script>
 
 <style lang="scss" scoped>
@@ -330,6 +478,13 @@ const handleGuestLogin = async () => {
   position: relative;
   display: flex;
   align-items: center;
+
+  &--captcha {
+    input {
+      flex: 1;
+      border-radius: $border-radius-lg 0 0 $border-radius-lg;
+    }
+  }
 }
 
 .login__input-icon {
@@ -337,6 +492,7 @@ const handleGuestLogin = async () => {
   left: $spacing-md;
   font-size: 18px;
   color: $text-muted;
+  z-index: 1;
 }
 
 .login__form-input {
@@ -367,6 +523,32 @@ const handleGuestLogin = async () => {
       border-color: $error-color;
       box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
     }
+  }
+
+  &--captcha {
+    padding-right: $spacing-md;
+  }
+}
+
+.login__captcha-btn {
+  padding: $spacing-md $spacing-lg;
+  background: $accent-color;
+  color: #ffffff;
+  border: none;
+  border-radius: 0 $border-radius-lg $border-radius-lg 0;
+  font-size: $font-size-sm;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all $transition-fast;
+  white-space: nowrap;
+
+  &:hover:not(:disabled) {
+    background: #2563eb;
+  }
+
+  &:disabled {
+    background: $border-color;
+    cursor: not-allowed;
   }
 }
 
@@ -440,6 +622,9 @@ const handleGuestLogin = async () => {
   color: $accent-color;
   text-decoration: none;
   font-size: $font-size-sm;
+  background: none;
+  border: none;
+  cursor: pointer;
   
   &:hover {
     text-decoration: underline;
@@ -518,11 +703,71 @@ const handleGuestLogin = async () => {
   color: $text-muted;
 }
 
-.login__form-footer {
+.login__modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.login__modal {
+  background: #ffffff;
+  padding: $spacing-xl;
+  border-radius: $border-radius-xl;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.2);
+}
+
+.login__modal-title {
+  font-size: $font-size-lg;
+  font-weight: 600;
+  color: $text-primary;
+  margin-bottom: $spacing-lg;
   text-align: center;
-  font-size: $font-size-sm;
-  color: $text-secondary;
-  margin-top: $spacing-lg;
+}
+
+.login__modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-lg;
+}
+
+.login__modal-actions {
+  display: flex;
+  gap: $spacing-md;
+  margin-top: $spacing-xl;
+}
+
+.login__modal-btn {
+  flex: 1;
+  padding: $spacing-md;
+  background: $accent-color;
+  color: #ffffff;
+  border: none;
+  border-radius: $border-radius-lg;
+  font-size: $font-size-base;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all $transition-fast;
+
+  &:hover {
+    background: #2563eb;
+  }
+
+  &--cancel {
+    background: $bg-tertiary;
+    color: $text-secondary;
+
+    &:hover {
+      background: $border-color;
+    }
+  }
 }
 </style>
-

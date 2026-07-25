@@ -1,7 +1,6 @@
 package com.synpharm.api;
 
 import com.synpharm.dto.request.LoginRequest;
-import com.synpharm.dto.request.RegisterRequest;
 import com.synpharm.dto.request.SendCaptchaRequest;
 import com.synpharm.dto.response.LoginResponse;
 import com.synpharm.exception.BusinessException;
@@ -24,58 +23,27 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-/**
- * 认证控制器
- *
- * <p>处理用户认证相关的HTTP请求。只负责接收请求、参数校验、调用Service、返回响应，
- * 不包含任何业务逻辑（瘦控制器，胖服务）。
- *
- * <p>重要设计：登录注册合二为一
- * <ul>
- *   <li>QQ邮箱登录时，新用户自动注册，老用户直接登录</li>
- *   <li>前端只有一个登录弹窗，不用单独做注册页</li>
- *   <li>用户体验更好，不用跳来跳去</li>
- * </ul>
- *
- * @author SynPharm Team
- * @version 2.0.0
- */
 @Slf4j
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
-@Tag(name = "认证管理", description = "用户登录、注册、验证码、登出接口")
+@Tag(name = "认证管理", description = "用户登录、验证码、忘记密码、登出接口")
 public class AuthController {
 
-    /** 认证服务（登录总入口） */
     private final AuthService authService;
-
-    /** 验证码服务 */
     private final CaptchaService captchaService;
-
-    /** 验证器（用于动态分组验证） */
     private final Validator validator;
 
-    /**
-     * 登录接口
-     * <p>支持多种登录方式，通过 loginType 参数区分。
-     * QQ邮箱验证码登录时，新用户自动注册。
-     *
-     * @param request     登录请求对象
-     * @param httpRequest HTTP请求对象
-     * @return 登录成功返回包含accessToken和用户信息的响应
-     */
     @PostMapping("/login")
-    @Operation(summary = "用户登录", description = "支持多种登录方式，QQ邮箱验证码登录时新用户自动注册")
+    @Operation(summary = "用户登录", description = "支持多种登录方式：qq_email（QQ邮箱验证码，新用户自动注册）、guest（游客登录）")
     public Result<LoginResponse> login(@RequestBody LoginRequest request,
                                        HttpServletRequest httpRequest) {
-        // 先校验默认分组（loginType必填）
         validateByGroup(request, jakarta.validation.groups.Default.class);
 
-        // 根据 loginType 选择对应分组进行字段验证
         switch (request.getLoginType()) {
             case "qq_email" -> validateByGroup(request, QqEmailLoginGroup.class);
-            // 后续新增登录方式，在这里加对应的分组验证
+            case "guest" -> {
+            }
             default -> throw new BusinessException(ErrorCode.BAD_REQUEST,
                     "不支持的登录方式: " + request.getLoginType());
         }
@@ -83,56 +51,28 @@ public class AuthController {
         return Result.success(authService.login(request, httpRequest));
     }
 
-    /**
-     * 使用指定分组校验请求参数
-     * <p>如果校验失败，抛出 BAD_REQUEST 异常，异常处理器会统一处理。
-     */
-    private <T> void validateByGroup(T object, Class<?>... groups) {
-        Set<ConstraintViolation<T>> violations = validator.validate(object, groups);
-        if (!violations.isEmpty()) {
-            String message = violations.stream()
-                    .map(ConstraintViolation::getMessage)
-                    .collect(Collectors.joining("; "));
-            throw new BusinessException(ErrorCode.BAD_REQUEST, message);
-        }
-    }
-
-    /**
-     * 发送邮箱验证码
-     * <p>登录/注册都用这个接口。验证码有效期为1分钟。
-     *
-     * @param request 发送验证码请求对象
-     * @return 发送成功返回成功响应
-     */
     @PostMapping("/captcha/send")
-    @Operation(summary = "发送邮箱验证码", description = "发送6位数字验证码到QQ邮箱，1分钟有效")
+    @Operation(summary = "发送邮箱验证码", description = "发送6位数字验证码到QQ邮箱，1分钟有效。type=login用于登录，type=reset用于忘记密码")
     public Result<Void> sendCaptcha(@Valid @RequestBody SendCaptchaRequest request) {
         captchaService.sendCaptcha(request.getEmail(), request.getType());
         return Result.success();
     }
 
-    /**
-     * 用户注册
-     * <p>使用QQ邮箱验证码进行注册，验证码需要提前通过发送验证码接口获取。
-     *
-     * @param request     注册请求对象
-     * @param httpRequest HTTP请求对象
-     * @return 注册成功返回包含accessToken和用户信息的响应
-     */
-    @PostMapping("/register")
-    @Operation(summary = "用户注册", description = "使用QQ邮箱验证码注册，注册成功后自动登录")
-    public Result<LoginResponse> register(@Valid @RequestBody RegisterRequest request,
-                                          HttpServletRequest httpRequest) {
-        return Result.success(authService.register(request, httpRequest));
+    @PostMapping("/password/reset")
+    @Operation(summary = "忘记密码", description = "使用邮箱验证码重置密码")
+    public Result<Void> resetPassword(@RequestBody java.util.Map<String, String> body) {
+        String email = body.get("email");
+        String captcha = body.get("captcha");
+        String newPassword = body.get("newPassword");
+
+        if (!StringUtils.hasText(email) || !StringUtils.hasText(captcha) || !StringUtils.hasText(newPassword)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "参数不完整");
+        }
+
+        authService.resetPassword(email, captcha, newPassword);
+        return Result.success();
     }
 
-    /**
-     * 用户登出
-     * <p>将当前Token加入黑名单，立即失效。
-     *
-     * @param request HTTP请求对象
-     * @return 登出成功返回成功响应
-     */
     @PostMapping("/logout")
     @Operation(summary = "用户登出", description = "将当前Token加入黑名单，立即失效")
     public Result<Void> logout(HttpServletRequest request) {
@@ -141,20 +81,12 @@ public class AuthController {
         return Result.success();
     }
 
-    /**
-     * 管理员调试登录接口
-     * <p>⚠️ 仅限开发调试使用，输入固定验证码"zhihuyaoyan"即可登录。
-     * 该接口后续上线前必须删除！
-     *
-     * @param captcha 调试验证码（固定为 zhihuyaoyan）
-     * @return 登录成功返回包含accessToken和用户信息的响应
-     */
     @PostMapping("/debug/login")
     @Operation(summary = "管理员调试登录", description = "⚠️ 开发调试专用，输入zhihuyaoyan直接登录")
     public Result<LoginResponse> debugLogin(@RequestBody java.util.Map<String, String> body,
                                             HttpServletRequest httpRequest) {
         String captcha = body.get("captcha");
-        
+
         if (!"zhihuyaoyan".equals(captcha)) {
             throw new BusinessException(ErrorCode.UNAUTHORIZED, "调试验证码错误");
         }
@@ -169,10 +101,16 @@ public class AuthController {
         return Result.success(authService.login(loginRequest, httpRequest));
     }
 
-    /**
-     * 从请求头中提取Token
-     * <p>格式：Authorization: Bearer <token>
-     */
+    private <T> void validateByGroup(T object, Class<?>... groups) {
+        Set<ConstraintViolation<T>> violations = validator.validate(object, groups);
+        if (!violations.isEmpty()) {
+            String message = violations.stream()
+                    .map(ConstraintViolation::getMessage)
+                    .collect(Collectors.joining("; "));
+            throw new BusinessException(ErrorCode.BAD_REQUEST, message);
+        }
+    }
+
     private String extractToken(HttpServletRequest request) {
         String bearerToken = request.getHeader("Authorization");
         if (StringUtils.hasText(bearerToken) && bearerToken.startsWith("Bearer ")) {

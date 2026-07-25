@@ -1,0 +1,98 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: synpharm-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: synpharm_root
+      MYSQL_DATABASE: synpharm
+      MYSQL_USER: synpharm
+      MYSQL_PASSWORD: synpharm_pass
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./synpharm-backend/src/main/resources/sql/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - synpharm-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: synpharm-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - synpharm-network
+
+  backend:
+    build: ./synpharm-backend
+    container_name: synpharm-backend
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: synpharm
+      MYSQL_USERNAME: synpharm
+      MYSQL_PASSWORD: synpharm_pass
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./synpharm-backend/src/main/resources/application.yml:/app/application.yml
+    networks:
+      - synpharm-network
+
+  fastapi:
+    build: ./synpharm-fastapi
+    container_name: synpharm-fastapi
+    ports:
+      - "8000:8000"
+    environment:
+      DEVICE: cpu
+      BATCH_SIZE: 50
+    volumes:
+      - ./synpharm-fastapi/models:/app/models
+      - ./synpharm-fastapi/logs:/app/logs
+    networks:
+      - synpharm-network
+
+  frontend:
+    image: nginx:alpine
+    container_name: synpharm-frontend
+    ports:
+      - "80:80"
+    volumes:
+      - ./synpharm-frontend/dist:/usr/share/nginx/html
+      - ./synpharm-frontend/nginx.conf:/etc/nginx/nginx.conf
+    depends_on:
+      - backend
+      - fastapi
+    networks:
+      - synpharm-network
+
+volumes:
+  mysql_data:
+  redis_data:
+
+networks:
+  synpharm-network:
+    driver: bridge

@@ -26,7 +26,8 @@ public class LoginRequest {
     /**
      * 登录类型（必填）
      * <ul>
-     *   <li>qq_email: QQ邮箱验证码登录</li>
+     *   <li>qq_email: QQ邮箱验证码登录（新用户自动注册）</li>
+     *   <li>guest: 游客登录（匿名访问，权限受限）</li>
      *   <li>password: 邮箱密码登录（预留）</li>
      *   <li>phone: 手机号验证码登录（预留）</li>
      *   <li>wechat: 微信登录（预留）</li>

@@ -78,15 +78,11 @@ export interface User {
 }
 
 export interface LoginCredentials {
-  email: string
-  password: string
-}
-
-export interface RegisterData {
-  email: string
-  password: string
-  confirmPassword: string
-  nickname: string
+  loginType: 'qq_email' | 'guest' | 'password' | 'phone'
+  email?: string
+  captcha?: string
+  password?: string
+  phone?: string
 }
 
 export interface AuthState {
