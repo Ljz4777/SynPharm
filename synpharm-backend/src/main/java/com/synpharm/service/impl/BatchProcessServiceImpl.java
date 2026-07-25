@@ -5,8 +5,10 @@ import com.synpharm.dto.request.PredictRequest;
 import com.synpharm.dto.response.BatchPredictionResponse;
 import com.synpharm.dto.response.BatchStatusResponse;
 import com.synpharm.dto.response.BatchUploadResponse;
+import com.synpharm.dto.response.PredictResultResponse;
 import com.synpharm.exception.BusinessException;
 import com.synpharm.model.entity.BatchTask;
+import com.synpharm.pipeline.DataPipelineFactory;
 import com.synpharm.repository.mapper.BatchTaskMapper;
 import com.synpharm.service.BatchProcessService;
 import com.synpharm.utils.CsvUtils;
@@ -24,9 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
-import java.io.IOException;
 import java.math.BigDecimal;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -38,6 +38,7 @@ public class BatchProcessServiceImpl implements BatchProcessService {
 
     private final BatchTaskMapper batchTaskMapper;
     private final FastApiClient fastApiClient;
+    private final DataPipelineFactory dataPipelineFactory;
 
     @Value("${file.upload-dir:./uploads}")
     private String uploadDir;
@@ -116,31 +117,42 @@ public class BatchProcessServiceImpl implements BatchProcessService {
         batchTaskMapper.updateById(progress.getTask());
 
         List<Map<String, Object>> allResults = new ArrayList<>();
-        List<PredictRequest> chunk = new ArrayList<>();
         int chunkCount = 0;
 
         try {
             List<String> lines = CsvUtils.readLines(progress.getTask().getFilePath());
 
             for (String line : lines) {
-                PredictRequest request = CsvUtils.parseLine(line, algoType);
-                if (request != null) {
-                    chunk.add(request);
+                try {
+                    PredictRequest request = CsvUtils.parseLine(line, algoType);
+                    if (request != null) {
+                        PredictResultResponse response = dataPipelineFactory.process(
+                                "smiles",
+                                algoType,
+                                "json",
+                                line,
+                                null
+                        );
 
-                    if (chunk.size() >= CHUNK_SIZE) {
-                        processChunk(batchId, chunk, allResults);
-                        chunk.clear();
-                        chunkCount++;
-
-                        if (chunkCount % PROGRESS_UPDATE_INTERVAL == 0) {
-                            batchTaskMapper.updateById(progress.getTask());
-                        }
+                        Map<String, Object> result = new HashMap<>();
+                        result.put("algoType", response.getAlgoType());
+                        result.put("targetId", response.getTargetId());
+                        result.put("targetName", response.getTargetName());
+                        result.put("bindingAffinity", response.getBindingAffinity());
+                        result.put("confidenceScore", response.getConfidenceScore());
+                        result.put("confidenceLevel", response.getConfidenceLevel());
+                        allResults.add(result);
+                        progress.addSuccess(1);
                     }
+                } catch (Exception e) {
+                    log.error("处理单行失败: {}", line, e);
+                    progress.addFail(1);
                 }
-            }
 
-            if (!chunk.isEmpty()) {
-                processChunk(batchId, chunk, allResults);
+                chunkCount++;
+                if (chunkCount % PROGRESS_UPDATE_INTERVAL == 0) {
+                    batchTaskMapper.updateById(progress.getTask());
+                }
             }
 
             String resultPath = resultDir + "/" + batchId + "_result.csv";
@@ -161,26 +173,6 @@ public class BatchProcessServiceImpl implements BatchProcessService {
             progress.getTask().setErrorMsg(e.getMessage());
             batchTaskMapper.updateById(progress.getTask());
             progressCache.remove(batchId);
-        }
-    }
-
-    private void processChunk(String batchId, List<PredictRequest> chunk,
-                              List<Map<String, Object>> allResults) {
-        BatchTaskProgress progress = progressCache.get(batchId);
-        if (progress == null) {
-            log.error("批量任务进度缓存丢失: {}", batchId);
-            return;
-        }
-
-        try {
-            BatchPredictionResponse response = fastApiClient.predictBatch(chunk, chunk.get(0).getAlgoType());
-            if (response != null && response.getResults() != null) {
-                allResults.addAll(response.getResults());
-                progress.addSuccess(chunk.size());
-            }
-        } catch (Exception e) {
-            log.error("处理分片失败", e);
-            progress.addFail(chunk.size());
         }
     }
 

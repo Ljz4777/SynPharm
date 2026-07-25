@@ -8,6 +8,7 @@ import java.util.List;
 public class AlgoResponse {
 
     private String status;
+    private String algoType;
     private PredictionMetrics metrics;
 
     @Data
