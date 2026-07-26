@@ -4,9 +4,8 @@
 
 1. [任务概述](#1-任务概述)
 2. [开发步骤](#2-开发步骤)
-3. [输入解析器代码实现](#3-输入解析器代码实现)
-4. [输出格式化器代码实现](#4-输出格式化器代码实现)
-5. [测试验证](#5-测试验证)
+3. [代码实现](#3-代码实现)
+4. [测试验证](#4-测试验证)
 
 ---
 
@@ -14,28 +13,25 @@
 
 ### 1.1 目标
 
-创建 **UniprotInputParser** 和 **JsonOutputFormatter**，支持通过UniProt蛋白质ID进行输入，输出JSON格式的预测结果。
+创建 **UniprotInputParser**，支持通过UniProt蛋白质ID进行输入，自动查询蛋白质序列。
 
 ### 1.2 所需文件
 
 | 文件 | 状态 | 说明 |
 |:---|:---|:---|
 | `pipeline/impl/UniprotInputParser.java` | ❌待创建 | UniProt输入解析器 |
-| `pipeline/impl/JsonOutputFormatter.java` | ✅已完成 | JSON输出格式化器（通用） |
 
 ### 1.3 复用现有组件
 
 | 文件 | 功能 | 复用性 |
 |:---|:---|:---|
 | `pipeline/InputParser.java` | 输入解析器接口 | ✅通用 |
-| `pipeline/OutputFormatter.java` | 输出格式化器接口 | ✅通用 |
 | `dto/ParsedInput.java` | 统一输入格式DTO | ✅通用 |
-| `dto/response/AlgoResponse.java` | 算法响应DTO | ✅通用 |
-| `dto/response/PredictResultResponse.java` | 预测结果响应DTO | ✅通用 |
 | `enums/InputType.java` | 输入类型枚举 | ✅通用（已包含UNIPROT） |
-| `enums/OutputType.java` | 输出类型枚举 | ✅通用（已包含JSON） |
 
 ### 1.4 支持的数据流组合
+
+创建后自动支持：
 
 | InputType | AlgoType | OutputType | 状态 |
 |:---|:---|:---|:---|
@@ -51,12 +47,8 @@
 | 序号 | 文件 | 状态 | 说明 |
 |:---|:---|:---|:---|
 | 1 | `enums/InputType.java` | ✅ | 输入类型枚举（已包含UNIPROT） |
-| 2 | `enums/OutputType.java` | ✅ | 输出类型枚举（已包含JSON） |
-| 3 | `dto/ParsedInput.java` | ✅ | 统一输入格式DTO |
-| 4 | `dto/response/AlgoResponse.java` | ✅ | 算法响应DTO |
-| 5 | `dto/response/PredictResultResponse.java` | ✅ | 预测结果响应DTO |
-| 6 | `pipeline/InputParser.java` | ✅ | 输入解析器接口 |
-| 7 | `pipeline/OutputFormatter.java` | ✅ | 输出格式化器接口 |
+| 2 | `dto/ParsedInput.java` | ✅ | 统一输入格式DTO |
+| 3 | `pipeline/InputParser.java` | ✅ | 输入解析器接口 |
 
 ### 步骤1：创建UniprotInputParser文件
 
@@ -69,11 +61,7 @@
 1. `getInputType()` - 返回输入类型
 2. `parse()` - 解析UniProt ID，查询蛋白质序列
 
-### 步骤3：确认JsonOutputFormatter已完成
-
-**文件**：`pipeline/impl/JsonOutputFormatter.java`（已完成，无需修改）
-
-### 步骤4：完成！
+### 步骤3：完成！
 
 Spring启动时自动扫描并注册到工厂，无需额外配置。
 
@@ -89,32 +77,23 @@ Spring启动时自动扫描并注册到工厂，无需额外配置。
 │  阶段1: 基础准备（架构师完成）                                    │
 │  ┌─────────────────────────────────────────────────────────┐    │
 │  │ ① enums/InputType.java          → 定义输入类型枚举        │    │
-│  │ ② enums/OutputType.java         → 定义输出类型枚举        │    │
-│  │ ③ dto/ParsedInput.java         → 统一输入格式            │    │
-│  │ ④ dto/response/AlgoResponse.java → 算法响应DTO          │    │
-│  │ ⑤ dto/response/PredictResultResponse.java → 预测结果DTO │    │
-│  │ ⑥ pipeline/InputParser.java    → 输入解析器接口          │    │
-│  │ ⑦ pipeline/OutputFormatter.java → 输出格式化器接口       │    │
+│  │ ② dto/ParsedInput.java         → 统一输入格式            │    │
+│  │ ③ pipeline/InputParser.java    → 输入解析器接口          │    │
 │  └─────────────────────────────────────────────────────────┘    │
 │                              ↓                                  │
 │  阶段2: 实现输入解析器（组员完成）                                │
 │  ┌─────────────────────────────────────────────────────────┐    │
-│  │ ⑧ pipeline/impl/UniprotInputParser.java → UniProt解析器 │    │
+│  │ ④ pipeline/impl/UniprotInputParser.java → UniProt解析器 │    │
 │  └─────────────────────────────────────────────────────────┘    │
 │                              ↓                                  │
-│  阶段3: 确认输出格式化器（已完成）                                │
-│  ┌─────────────────────────────────────────────────────────┐    │
-│  │ ⑨ pipeline/impl/JsonOutputFormatter.java → JSON格式化器 │    │
-│  └─────────────────────────────────────────────────────────┘    │
-│                              ↓                                  │
-│  阶段4: 自动注册（Spring完成）                                   │
+│  阶段3: 自动注册（Spring完成）                                   │
 │  ┌─────────────────────────────────────────────────────────┐    │
 │  │ Spring启动时自动扫描并注册到DataPipelineFactory          │    │
 │  └─────────────────────────────────────────────────────────┘    │
 │                              ↓                                  │
-│  阶段5: 验证测试（组员完成）                                      │
+│  阶段4: 验证测试（组员完成）                                      │
 │  ┌─────────────────────────────────────────────────────────┐    │
-│  │ ⑩ 单元测试 → 编译 → 启动 → 接口测试                     │    │
+│  │ ⑤ 单元测试 → 编译 → 启动 → 接口测试                      │    │
 │  └─────────────────────────────────────────────────────────┘    │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
@@ -122,7 +101,7 @@ Spring启动时自动扫描并注册到工厂，无需额外配置。
 
 ---
 
-## 3. 输入解析器代码实现
+## 3. 代码实现
 
 ### 3.1 UniprotInputParser.java
 
@@ -179,6 +158,10 @@ public class UniprotInputParser implements InputParser {
     private String queryUniProtSequence(String uniprotId) {
         log.debug("查询UniProt序列: {}", uniprotId);
         
+        // TODO: 调用UniProt API查询蛋白质序列
+        // 示例: https://rest.uniprot.org/uniprotkb/{uniprotId}.fasta
+        
+        // 当前使用模拟数据，后续替换为真实API调用
         if (uniprotId.equalsIgnoreCase("P00533")) {
             return "MGLGLG...(EGFR蛋白质序列)";
         }
@@ -186,14 +169,15 @@ public class UniprotInputParser implements InputParser {
             return "MVHLTE...(血红蛋白序列)";
         }
         
+        // 默认返回UniProt ID作为序列（用于测试）
         return uniprotId;
     }
 }
 ```
 
-### 3.2 输入解析器代码讲解
+### 3.2 代码讲解
 
-**parse方法流程：**
+#### parse方法流程
 
 1. **参数验证**：检查输入是否为空
    ```java
@@ -223,140 +207,30 @@ public class UniprotInputParser implements InputParser {
            .build();
    ```
 
-**输入输出示例：**
-```
-输入: "P00533,P12345"
-输出: ParsedInput {
-         params: ["MGLGLG...", "MVHLTE..."],
-         inputType: "uniprot"
-      }
-```
+#### queryUniProtSequence方法
 
----
-
-## 4. 输出格式化器代码实现
-
-### 4.1 JsonOutputFormatter.java（已完成）
+当前使用模拟数据，后续需要替换为真实API调用：
 
 ```java
-package com.synpharm.pipeline.impl;
-
-import com.synpharm.dto.response.AlgoResponse;
-import com.synpharm.dto.response.PredictResultResponse;
-import com.synpharm.enums.OutputType;
-import com.synpharm.pipeline.OutputFormatter;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
-
-import java.util.ArrayList;
-import java.util.List;
-
-@Slf4j
-@Component
-public class JsonOutputFormatter implements OutputFormatter {
-
-    @Override
-    public OutputType getOutputType() {
-        return OutputType.JSON;
-    }
-
-    @Override
-    public PredictResultResponse format(AlgoResponse response) {
-        if (response == null || response.getMetrics() == null) {
-            throw new RuntimeException("预测结果为空");
-        }
-        
-        log.debug("格式化JSON输出: status={}, algoType={}", response.getStatus(), response.getAlgoType());
-        
-        return buildResponse(response);
-    }
-
-    @Override
-    public List<PredictResultResponse> batchFormat(List<AlgoResponse> resultDataList) {
-        log.debug("批量格式化JSON输出: 数量={}", resultDataList.size());
-        
-        List<PredictResultResponse> responses = new ArrayList<>();
-        for (AlgoResponse response : resultDataList) {
-            try {
-                responses.add(buildResponse(response));
-            } catch (Exception e) {
-                log.warn("格式化单个结果失败", e);
-            }
-        }
-        return responses;
-    }
-
-    private PredictResultResponse buildResponse(AlgoResponse response) {
-        var metrics = response.getMetrics();
-        List<PredictResultResponse.InteractionInfo> interactions = new ArrayList<>();
-        
-        if (metrics.getInteractions() != null) {
-            for (var interaction : metrics.getInteractions()) {
-                interactions.add(PredictResultResponse.InteractionInfo.builder()
-                        .residue(interaction.getResidue())
-                        .type(interaction.getType())
-                        .distance(interaction.getDistance())
-                        .build());
-            }
-        }
-        
-        return PredictResultResponse.builder()
-                .algoType(response.getAlgoType())
-                .targetId(metrics.getTargetId())
-                .targetName(metrics.getTargetName())
-                .bindingAffinity(metrics.getBindingAffinity())
-                .confidenceScore(metrics.getConfidenceScore())
-                .confidenceLevel(metrics.getConfidenceLevel())
-                .interactions(interactions)
-                .build();
-    }
-}
-```
-
-### 4.2 输出格式化器代码讲解
-
-**format方法流程：**
-
-1. **参数验证**：检查结果是否为空
-   ```java
-   if (response == null || response.getMetrics() == null) {
-       throw new RuntimeException("预测结果为空");
-   }
-   ```
-
-2. **构建响应**：调用 `buildResponse()` 构建预测结果响应
-   ```java
-   return buildResponse(response);
-   ```
-
-**输出格式示例：**
-```json
-{
-    "algoType": "DTI",
-    "targetId": "P00533",
-    "targetName": "EGFR",
-    "bindingAffinity": -9.25,
-    "confidenceScore": 0.92,
-    "confidenceLevel": "high",
-    "interactions": [
-        {"residue": "Lys745", "type": "hydrogen_bond", "distance": 2.8}
-    ]
+// 真实实现（后续）
+private String queryUniProtSequence(String uniprotId) {
+    // 调用UniProt REST API
+    // GET https://rest.uniprot.org/uniprotkb/{uniprotId}.fasta
+    // 解析FASTA格式，提取序列
 }
 ```
 
 ---
 
-## 5. 测试验证
+## 4. 测试验证
 
-### 5.1 单元测试
+### 4.1 单元测试
 
 ```java
 package com.synpharm.pipeline.impl;
 
 import com.synpharm.dto.ParsedInput;
-import com.synpharm.dto.response.AlgoResponse;
 import com.synpharm.enums.InputType;
-import com.synpharm.enums.OutputType;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -364,16 +238,10 @@ import static org.junit.jupiter.api.Assertions.*;
 class UniprotInputParserTest {
 
     private final UniprotInputParser parser = new UniprotInputParser();
-    private final JsonOutputFormatter formatter = new JsonOutputFormatter();
 
     @Test
     void testGetInputType() {
         assertEquals(InputType.UNIPROT, parser.getInputType());
-    }
-
-    @Test
-    void testGetOutputType() {
-        assertEquals(OutputType.JSON, formatter.getOutputType());
     }
 
     @Test
@@ -397,7 +265,7 @@ class UniprotInputParserTest {
 }
 ```
 
-### 5.2 接口测试
+### 4.2 接口测试
 
 使用Postman或curl测试：
 
@@ -413,15 +281,14 @@ Content-Type: application/json
 }
 ```
 
-### 5.3 验证步骤
+### 4.3 验证步骤
 
 1. ✅ 创建 `UniprotInputParser.java` 文件
 2. ✅ 编写代码，实现 `InputParser` 接口
-3. ✅ 确认 `JsonOutputFormatter.java` 已存在
-4. ✅ 编译项目，确保无错误
-5. ✅ 启动应用，查看日志：`注册输入解析器: uniprot`、`注册输出格式化器: json`
-6. ✅ 调用预测接口，确认返回正确格式
-7. ✅ 测试异常输入，确认错误处理
+3. ✅ 编译项目，确保无错误
+4. ✅ 启动应用，查看日志：`注册输入解析器: uniprot`
+5. ✅ 调用预测接口，确认返回正确格式
+6. ✅ 测试异常输入，确认错误处理
 
 ---
 
@@ -429,12 +296,9 @@ Content-Type: application/json
 
 | 文件 | 路径 | 说明 |
 |:---|:---|:---|
-| 输入解析器参考 | `pipeline/impl/SmilesInputParser.java` | SMILES输入解析器实现（已完成） |
-| 输出格式化器参考 | `pipeline/impl/JsonOutputFormatter.java` | JSON输出格式化器实现（已完成） |
-| 输入解析器接口 | `pipeline/InputParser.java` | 输入解析器接口定义 |
-| 输出格式化器接口 | `pipeline/OutputFormatter.java` | 输出格式化器接口定义 |
-| 输入DTO | `dto/ParsedInput.java` | 统一输入格式 |
-| 输出DTO | `dto/response/PredictResultResponse.java` | 预测结果响应 |
+| 参考示例 | `pipeline/impl/SmilesInputParser.java` | SMILES输入解析器实现（已完成） |
+| 接口定义 | `pipeline/InputParser.java` | 输入解析器接口 |
+| DTO | `dto/ParsedInput.java` | 统一输入格式 |
 
 ---
 

@@ -4,9 +4,8 @@
 
 1. [任务概述](#1-任务概述)
 2. [开发步骤](#2-开发步骤)
-3. [输入解析器代码实现](#3-输入解析器代码实现)
-4. [输出格式化器代码实现](#4-输出格式化器代码实现)
-5. [测试验证](#5-测试验证)
+3. [代码实现](#3-代码实现)
+4. [测试验证](#4-测试验证)
 
 ---
 
@@ -14,28 +13,25 @@
 
 ### 1.1 目标
 
-创建 **PdbInputParser** 和 **JsonOutputFormatter**，支持通过PDB文件路径进行输入，输出JSON格式的预测结果。
+创建 **PdbInputParser**，支持通过PDB文件路径进行输入，读取蛋白质结构信息。
 
 ### 1.2 所需文件
 
 | 文件 | 状态 | 说明 |
 |:---|:---|:---|
 | `pipeline/impl/PdbInputParser.java` | ❌待创建 | PDB输入解析器 |
-| `pipeline/impl/JsonOutputFormatter.java` | ✅已完成 | JSON输出格式化器（通用） |
 
 ### 1.3 复用现有组件
 
 | 文件 | 功能 | 复用性 |
 |:---|:---|:---|
 | `pipeline/InputParser.java` | 输入解析器接口 | ✅通用 |
-| `pipeline/OutputFormatter.java` | 输出格式化器接口 | ✅通用 |
 | `dto/ParsedInput.java` | 统一输入格式DTO | ✅通用 |
-| `dto/response/AlgoResponse.java` | 算法响应DTO | ✅通用 |
-| `dto/response/PredictResultResponse.java` | 预测结果响应DTO | ✅通用 |
 | `enums/InputType.java` | 输入类型枚举 | ✅通用（已包含PDB） |
-| `enums/OutputType.java` | 输出类型枚举 | ✅通用（已包含JSON） |
 
 ### 1.4 支持的数据流组合
+
+创建后自动支持：
 
 | InputType | AlgoType | OutputType | 状态 |
 |:---|:---|:---|:---|
@@ -51,12 +47,8 @@
 | 序号 | 文件 | 状态 | 说明 |
 |:---|:---|:---|:---|
 | 1 | `enums/InputType.java` | ✅ | 输入类型枚举（已包含PDB） |
-| 2 | `enums/OutputType.java` | ✅ | 输出类型枚举（已包含JSON） |
-| 3 | `dto/ParsedInput.java` | ✅ | 统一输入格式DTO |
-| 4 | `dto/response/AlgoResponse.java` | ✅ | 算法响应DTO |
-| 5 | `dto/response/PredictResultResponse.java` | ✅ | 预测结果响应DTO |
-| 6 | `pipeline/InputParser.java` | ✅ | 输入解析器接口 |
-| 7 | `pipeline/OutputFormatter.java` | ✅ | 输出格式化器接口 |
+| 2 | `dto/ParsedInput.java` | ✅ | 统一输入格式DTO |
+| 3 | `pipeline/InputParser.java` | ✅ | 输入解析器接口 |
 
 ### 步骤1：创建PdbInputParser文件
 
@@ -69,11 +61,7 @@
 1. `getInputType()` - 返回输入类型
 2. `parse()` - 解析PDB文件路径，读取蛋白质结构
 
-### 步骤3：确认JsonOutputFormatter已完成
-
-**文件**：`pipeline/impl/JsonOutputFormatter.java`（已完成，无需修改）
-
-### 步骤4：完成！
+### 步骤3：完成！
 
 Spring启动时自动扫描并注册到工厂，无需额外配置。
 
@@ -89,32 +77,23 @@ Spring启动时自动扫描并注册到工厂，无需额外配置。
 │  阶段1: 基础准备（架构师完成）                                    │
 │  ┌─────────────────────────────────────────────────────────┐    │
 │  │ ① enums/InputType.java          → 定义输入类型枚举        │    │
-│  │ ② enums/OutputType.java         → 定义输出类型枚举        │    │
-│  │ ③ dto/ParsedInput.java         → 统一输入格式            │    │
-│  │ ④ dto/response/AlgoResponse.java → 算法响应DTO          │    │
-│  │ ⑤ dto/response/PredictResultResponse.java → 预测结果DTO │    │
-│  │ ⑥ pipeline/InputParser.java    → 输入解析器接口          │    │
-│  │ ⑦ pipeline/OutputFormatter.java → 输出格式化器接口       │    │
+│  │ ② dto/ParsedInput.java         → 统一输入格式            │    │
+│  │ ③ pipeline/InputParser.java    → 输入解析器接口          │    │
 │  └─────────────────────────────────────────────────────────┘    │
 │                              ↓                                  │
 │  阶段2: 实现输入解析器（组员完成）                                │
 │  ┌─────────────────────────────────────────────────────────┐    │
-│  │ ⑧ pipeline/impl/PdbInputParser.java → PDB解析器         │    │
+│  │ ④ pipeline/impl/PdbInputParser.java → PDB解析器         │    │
 │  └─────────────────────────────────────────────────────────┘    │
 │                              ↓                                  │
-│  阶段3: 确认输出格式化器（已完成）                                │
-│  ┌─────────────────────────────────────────────────────────┐    │
-│  │ ⑨ pipeline/impl/JsonOutputFormatter.java → JSON格式化器 │    │
-│  └─────────────────────────────────────────────────────────┘    │
-│                              ↓                                  │
-│  阶段4: 自动注册（Spring完成）                                   │
+│  阶段3: 自动注册（Spring完成）                                   │
 │  ┌─────────────────────────────────────────────────────────┐    │
 │  │ Spring启动时自动扫描并注册到DataPipelineFactory          │    │
 │  └─────────────────────────────────────────────────────────┘    │
 │                              ↓                                  │
-│  阶段5: 验证测试（组员完成）                                      │
+│  阶段4: 验证测试（组员完成）                                      │
 │  ┌─────────────────────────────────────────────────────────┐    │
-│  │ ⑩ 单元测试 → 编译 → 启动 → 接口测试                     │    │
+│  │ ⑤ 单元测试 → 编译 → 启动 → 接口测试                      │    │
 │  └─────────────────────────────────────────────────────────┘    │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
@@ -122,7 +101,7 @@ Spring启动时自动扫描并注册到工厂，无需额外配置。
 
 ---
 
-## 3. 输入解析器代码实现
+## 3. 代码实现
 
 ### 3.1 PdbInputParser.java
 
@@ -135,6 +114,9 @@ import com.synpharm.pipeline.InputParser;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.List;
 
@@ -179,9 +161,9 @@ public class PdbInputParser implements InputParser {
         log.debug("读取PDB文件: {}", filePath);
         
         try {
-            java.nio.file.Path path = java.nio.file.Paths.get(filePath);
-            if (java.nio.file.Files.exists(path)) {
-                return java.nio.file.Files.readString(path);
+            Path path = Paths.get(filePath);
+            if (Files.exists(path)) {
+                return Files.readString(path);
             }
             
             log.warn("PDB文件不存在: {}, 使用模拟数据", filePath);
@@ -195,6 +177,11 @@ public class PdbInputParser implements InputParser {
 
     private String extractSequenceFromPdb(String pdbData) {
         log.debug("从PDB数据中提取序列");
+        
+        // TODO: 解析PDB格式，提取蛋白质序列
+        // PDB格式包含SEQRES记录，可从中提取序列
+        
+        // 当前返回模拟序列
         return "MGLGLG...(从PDB文件提取的序列)";
     }
 
@@ -217,9 +204,9 @@ public class PdbInputParser implements InputParser {
 }
 ```
 
-### 3.2 输入解析器代码讲解
+### 3.2 代码讲解
 
-**parse方法流程：**
+#### parse方法流程
 
 1. **确定文件路径**：优先使用 `fileUrl`，其次使用 `inputValue`
    ```java
@@ -244,139 +231,23 @@ public class PdbInputParser implements InputParser {
            .build();
    ```
 
-**输入输出示例：**
-```
-输入: fileUrl="/uploads/1a9u.pdb"
-输出: ParsedInput {
-         params: ["MGLGLG...", "HEADER...ATOM...END"],
-         inputType: "pdb"
-      }
-```
+#### PDB文件读取说明
+
+- **本地文件**：直接读取文件系统中的PDB文件
+- **远程文件**：后续可扩展支持从URL下载
+- **模拟数据**：文件不存在时使用模拟数据，便于测试
 
 ---
 
-## 4. 输出格式化器代码实现
+## 4. 测试验证
 
-### 4.1 JsonOutputFormatter.java（已完成）
-
-```java
-package com.synpharm.pipeline.impl;
-
-import com.synpharm.dto.response.AlgoResponse;
-import com.synpharm.dto.response.PredictResultResponse;
-import com.synpharm.enums.OutputType;
-import com.synpharm.pipeline.OutputFormatter;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
-
-import java.util.ArrayList;
-import java.util.List;
-
-@Slf4j
-@Component
-public class JsonOutputFormatter implements OutputFormatter {
-
-    @Override
-    public OutputType getOutputType() {
-        return OutputType.JSON;
-    }
-
-    @Override
-    public PredictResultResponse format(AlgoResponse response) {
-        if (response == null || response.getMetrics() == null) {
-            throw new RuntimeException("预测结果为空");
-        }
-        
-        log.debug("格式化JSON输出: status={}, algoType={}", response.getStatus(), response.getAlgoType());
-        
-        return buildResponse(response);
-    }
-
-    @Override
-    public List<PredictResultResponse> batchFormat(List<AlgoResponse> resultDataList) {
-        log.debug("批量格式化JSON输出: 数量={}", resultDataList.size());
-        
-        List<PredictResultResponse> responses = new ArrayList<>();
-        for (AlgoResponse response : resultDataList) {
-            try {
-                responses.add(buildResponse(response));
-            } catch (Exception e) {
-                log.warn("格式化单个结果失败", e);
-            }
-        }
-        return responses;
-    }
-
-    private PredictResultResponse buildResponse(AlgoResponse response) {
-        var metrics = response.getMetrics();
-        List<PredictResultResponse.InteractionInfo> interactions = new ArrayList<>();
-        
-        if (metrics.getInteractions() != null) {
-            for (var interaction : metrics.getInteractions()) {
-                interactions.add(PredictResultResponse.InteractionInfo.builder()
-                        .residue(interaction.getResidue())
-                        .type(interaction.getType())
-                        .distance(interaction.getDistance())
-                        .build());
-            }
-        }
-        
-        return PredictResultResponse.builder()
-                .algoType(response.getAlgoType())
-                .targetId(metrics.getTargetId())
-                .targetName(metrics.getTargetName())
-                .bindingAffinity(metrics.getBindingAffinity())
-                .confidenceScore(metrics.getConfidenceScore())
-                .confidenceLevel(metrics.getConfidenceLevel())
-                .interactions(interactions)
-                .build();
-    }
-}
-```
-
-### 4.2 输出格式化器代码讲解
-
-**format方法流程：**
-
-1. **参数验证**：检查结果是否为空
-   ```java
-   if (response == null || response.getMetrics() == null) {
-       throw new RuntimeException("预测结果为空");
-   }
-   ```
-
-2. **构建响应**：调用 `buildResponse()` 构建预测结果响应
-   ```java
-   return buildResponse(response);
-   ```
-
-**输出格式示例：**
-```json
-{
-    "algoType": "DTI",
-    "targetId": "1a9u",
-    "targetName": "EGFR",
-    "bindingAffinity": -9.25,
-    "confidenceScore": 0.92,
-    "confidenceLevel": "high",
-    "interactions": [
-        {"residue": "Lys745", "type": "hydrogen_bond", "distance": 2.8}
-    ]
-}
-```
-
----
-
-## 5. 测试验证
-
-### 5.1 单元测试
+### 4.1 单元测试
 
 ```java
 package com.synpharm.pipeline.impl;
 
 import com.synpharm.dto.ParsedInput;
 import com.synpharm.enums.InputType;
-import com.synpharm.enums.OutputType;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -384,16 +255,10 @@ import static org.junit.jupiter.api.Assertions.*;
 class PdbInputParserTest {
 
     private final PdbInputParser parser = new PdbInputParser();
-    private final JsonOutputFormatter formatter = new JsonOutputFormatter();
 
     @Test
     void testGetInputType() {
         assertEquals(InputType.PDB, parser.getInputType());
-    }
-
-    @Test
-    void testGetOutputType() {
-        assertEquals(OutputType.JSON, formatter.getOutputType());
     }
 
     @Test
@@ -420,7 +285,7 @@ class PdbInputParserTest {
 }
 ```
 
-### 5.2 接口测试
+### 4.2 接口测试
 
 使用Postman或curl测试：
 
@@ -436,15 +301,14 @@ Content-Type: application/json
 }
 ```
 
-### 5.3 验证步骤
+### 4.3 验证步骤
 
 1. ✅ 创建 `PdbInputParser.java` 文件
 2. ✅ 编写代码，实现 `InputParser` 接口
-3. ✅ 确认 `JsonOutputFormatter.java` 已存在
-4. ✅ 编译项目，确保无错误
-5. ✅ 启动应用，查看日志：`注册输入解析器: pdb`、`注册输出格式化器: json`
-6. ✅ 调用预测接口，确认返回正确格式
-7. ✅ 测试异常输入，确认错误处理
+3. ✅ 编译项目，确保无错误
+4. ✅ 启动应用，查看日志：`注册输入解析器: pdb`
+5. ✅ 调用预测接口，确认返回正确格式
+6. ✅ 测试异常输入，确认错误处理
 
 ---
 
@@ -452,12 +316,9 @@ Content-Type: application/json
 
 | 文件 | 路径 | 说明 |
 |:---|:---|:---|
-| 输入解析器参考 | `pipeline/impl/SmilesInputParser.java` | SMILES输入解析器实现（已完成） |
-| 输出格式化器参考 | `pipeline/impl/JsonOutputFormatter.java` | JSON输出格式化器实现（已完成） |
-| 输入解析器接口 | `pipeline/InputParser.java` | 输入解析器接口定义 |
-| 输出格式化器接口 | `pipeline/OutputFormatter.java` | 输出格式化器接口定义 |
-| 输入DTO | `dto/ParsedInput.java` | 统一输入格式 |
-| 输出DTO | `dto/response/PredictResultResponse.java` | 预测结果响应 |
+| 参考示例 | `pipeline/impl/SmilesInputParser.java` | SMILES输入解析器实现（已完成） |
+| 接口定义 | `pipeline/InputParser.java` | 输入解析器接口 |
+| DTO | `dto/ParsedInput.java` | 统一输入格式 |
 
 ---
 
