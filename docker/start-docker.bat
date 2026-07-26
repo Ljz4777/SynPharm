@@ -1,5 +1,6 @@
 @echo off
 chcp 65001 >nul
+cd /d "%~dp0"
 echo ==========================================
 echo   SynPharm Docker 环境启动脚本
 echo ==========================================
@@ -18,7 +19,7 @@ echo.
 echo [2/4] 构建并启动服务...
 echo 这可能需要几分钟时间，请耐心等待...
 echo.
-docker-compose up -d --build
+docker compose up -d --build
 
 echo.
 echo [3/4] 检查服务启动状态...
@@ -51,6 +52,6 @@ echo 测试命令：
 echo   curl http://localhost:8000/health
 echo   curl http://localhost:8080/api/auth/captcha/send -H "Content-Type: application/json" -d "{\"email\":\"test@qq.com\",\"type\":\"login\"}"
 echo.
-echo 停止服务：docker-compose down
-echo 查看日志：docker-compose logs -f
+echo 停止服务：docker compose down
+echo 查看日志：docker compose logs -f
 echo ==========================================

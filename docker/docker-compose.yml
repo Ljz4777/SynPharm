@@ -11,7 +11,7 @@ services:
       - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
-      - ./synpharm-backend/sql:/docker-entrypoint-initdb.d
+      - ../synpharm-backend/sql:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 10s
@@ -41,7 +41,7 @@ services:
 
   backend:
     build: 
-      context: ./synpharm-backend
+      context: ../synpharm-backend
       dockerfile: Dockerfile
     container_name: synpharm-backend
     ports:
@@ -77,7 +77,7 @@ services:
 
   fastapi:
     build: 
-      context: ./synpharm-fastapi
+      context: ../synpharm-fastapi
       dockerfile: Dockerfile
     container_name: synpharm-fastapi
     ports:
@@ -86,7 +86,7 @@ services:
       DEVICE: cpu
       BATCH_SIZE: 50
     volumes:
-      - ./synpharm-fastapi/models:/app/models
+      - ../synpharm-fastapi/models:/app/models
       - fastapi_logs:/app/logs
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
