@@ -69,8 +69,22 @@ SynPharm AI预测核心模块是一个基于微服务架构的药物相互作用
         │
         ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                      SpringBoot 业务中台                                    │
+│                      SpringBoot 业务中台（管道机制）                          │
 │                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │ 管道接口层                                                           │    │
+│  │  InputParser<T>      → 解析不同类型输入（SMILES/UniProt/PDB/CSV）     │    │
+│  │  AlgoExecutor<I,O>   → 执行算法（DTI/PPI/DDI）                        │    │
+│  │  OutputFormatter<I,O>→ 格式化输出（JSON/CSV）                         │    │
+│  └────────────────────────────┬────────────────────────────────────────┘    │
+│                               ▼                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │ 管道工厂层（DataPipelineFactory）                                     │    │
+│  │  - 动态组合三个维度的策略                                              │    │
+│  │  - 运行时根据类型选择对应的解析器/执行器/格式化器                        │    │
+│  │  - 支持单条处理和批量处理                                              │    │
+│  └────────────────────────────┬────────────────────────────────────────┘    │
+│                               ▼                                             │
 │  ┌──────────────────┐   ┌──────────────────┐   ┌────────────────────────┐   │
 │  │ AuthController   │   │PredictController │   │BatchUploadController   │   │
 │  │ /api/auth/*      │   │/api/predict/*    │   │/api/batch/*           │   │
@@ -79,7 +93,7 @@ SynPharm AI预测核心模块是一个基于微服务架构的药物相互作用
 │           ▼                      ▼                          ▼              │
 │  ┌──────────────────┐   ┌──────────────────┐   ┌────────────────────────┐   │
 │  │AuthServiceImpl   │   │PredictServiceImpl│   │BatchProcessServiceImpl │   │
-│  │ 策略模式认证     │   │ 调用FastAPI      │   │ 解析CSV+异步调度       │   │
+│  │ 策略模式认证     │   │ 调用管道工厂      │   │ Redis进度+异步调度     │   │
 │  └────────┬─────────┘   └────────┬─────────┘   └────────────┬───────────┘   │
 │           │                      │                          │              │
 │           ▼                      ▼                          ▼              │
@@ -97,11 +111,10 @@ SynPharm AI预测核心模块是一个基于微服务架构的药物相互作用
             │           │  ┌─────────────────────────────────────────────┐  │
             │           │  │ main.py → /v1/predict/single → /v1/batch   │  │
             │           │  │              ↓                            │  │
-            │           │  │ core/loader.py (模型单例加载)              │  │
-            │           │  │              ↓                            │  │
-            │           │  │ services/dti_service.py (DTI推理)         │  │
-            │           │  │ services/ppi_service.py (PPI推理)         │  │
-            │           │  │ services/ddi_service.py (DDI推理)         │  │
+            │           │  │ 根据algo_type路由匹配：                     │  │
+            │           │  │  DTI → DTIService                         │  │
+            │           │  │  PPI → PPIService                         │  │
+            │           │  │  DDI → DDIService                         │  │
             │           │  │              ↓                            │  │
             │           │  │              GPU/CPU 执行推理              │  │
             │           │  └─────────────────────────────────────────────┘  │
@@ -110,7 +123,7 @@ SynPharm AI预测核心模块是一个基于微服务架构的药物相互作用
             ▼                                    ▼
      ┌───────────┐                       ┌──────────────┐
      │   Redis   │                       │   Models/    │
-     │ 缓存/限流  │                       │ dti_model.pt │
+     │ 缓存/限流/进度│                     │ dti_model.pt │
      └───────────┘                       │ ppi_model.pt │
                                          │ ddi_model.pt │
                                          └──────────────┘
@@ -129,9 +142,11 @@ SynPharm AI预测核心模块是一个基于微服务架构的药物相互作用
 | 特点 | 说明 |
 | :--- | :--- |
 | **微服务分离** | SpringBoot业务逻辑与FastAPI算法计算分离，支持独立部署 |
-| **无状态设计** | FastAPI为无状态计算节点，支持水平扩展 |
-| **异步处理** | 批量任务采用线程池异步执行，不阻塞主线程 |
+| **管道机制** | SpringBoot端采用策略模式，将输入解析、算法执行、输出格式化解耦为独立策略 |
+| **无状态设计** | FastAPI为无状态计算节点，支持水平扩展，只负责纯粹的算法运算 |
+| **异步处理** | 批量任务采用线程池异步执行，不阻塞主线程，进度存储于Redis |
 | **双模运行** | 支持单条实时预测和批量异步预测两种模式 |
+| **策略模式** | 通过PipelineFactory动态组合三个维度的策略，避免类爆炸 |
 
 ---
 
@@ -142,8 +157,8 @@ SynPharm AI预测核心模块是一个基于微服务架构的药物相互作用
 | 模块 | 职责 | 技术栈 |
 | :--- | :--- | :--- |
 | **用户认证模块** | 用户注册、登录、JWT认证、权限控制 | SpringBoot + Spring Security + Redis |
-| **SpringBoot预测模块** | 业务逻辑处理、任务管理、文件处理、结果持久化 | SpringBoot + MyBatis-Plus + WebClient |
-| **FastAPI预测模块** | 模型加载、GPU推理、算法计算 | FastAPI + PyTorch + CUDA |
+| **SpringBoot预测模块** | 管道机制、输入解析、算法执行、输出格式化、任务管理、结果持久化 | SpringBoot + MyBatis-Plus + WebClient + Redis |
+| **FastAPI预测模块** | 模型加载、路由匹配、GPU推理、算法计算 | FastAPI + PyTorch + CUDA |
 
 ### 3.2 项目结构
 
@@ -153,12 +168,19 @@ SynPharm/
 │   ├── src/main/java/com/synpharm/
 │   │   ├── api/                # 控制器层
 │   │   ├── service/            # 服务层
-│   │   ├── repository/         # 数据访问层
+│   │   ├── mapper/             # 数据访问层
+│   │   ├── entity/             # 实体模型
 │   │   ├── dto/                # 数据传输对象
-│   │   ├── model/              # 实体模型
 │   │   ├── config/             # 配置类
 │   │   ├── client/             # HTTP客户端
 │   │   ├── exception/          # 异常处理
+│   │   ├── pipeline/           # 管道机制（新增）
+│   │   │   ├── InputParser.java        # 输入解析器接口
+│   │   │   ├── AlgoExecutor.java       # 算法执行器接口
+│   │   │   ├── OutputFormatter.java    # 输出格式化器接口
+│   │   │   ├── PipelineFactory.java    # 管道工厂接口
+│   │   │   ├── DataPipelineFactory.java# 管道工厂实现
+│   │   │   └── impl/                   # 管道实现类
 │   │   └── utils/              # 工具类
 │   └── src/main/resources/
 │       ├── application.yml     # 应用配置
@@ -170,8 +192,17 @@ SynPharm/
 │   ├── requirements.txt        # Python依赖
 │   ├── models/                 # 模型文件
 │   ├── api/v1/                 # 接口路由
+│   │   ├── predict.py          # 预测路由（路由匹配）
+│   │   └── health.py           # 健康检查
 │   ├── core/                   # 核心模块
+│   │   ├── loader.py           # 模型单例加载器
+│   │   └── schemas.py          # Pydantic模型
 │   └── services/               # 算法服务
+│       ├── base_algo.py        # 算法基类
+│       ├── dti_service.py      # DTI服务
+│       ├── ppi_service.py      # PPI服务
+│       ├── ddi_service.py      # DDI服务
+│       └── batch_service.py    # 批量服务
 │
 ├── synpharm-frontend/          # Vue前端
 │   ├── src/
@@ -182,10 +213,14 @@ SynPharm/
 │   └── package.json
 │
 └── docs/                       # 技术文档
-    ├── AI预测核心模块技术开发文档.md              # 总览文档（本文档）
-    ├── 用户认证模块技术设计文档.md                 # 用户认证模块文档
-    ├── AI预测核心模块-SpringBoot后端技术开发文档.md # SpringBoot预测模块文档
-    └── AI预测核心模块-FastAPI算法引擎技术开发文档.md # FastAPI预测模块文档
+    ├── architecture/           # 架构文档
+    ├── modules/
+    │   ├── auth/               # 认证模块文档
+    │   └── predict/            # 预测模块文档
+    │       ├── algorithm/      # 算法执行器开发文档
+    │       └── data/           # 输入输出解析器开发文档
+    ├── development/            # 开发规范
+    └── deploy/                 # 部署文档
 ```
 
 ---
@@ -577,18 +612,51 @@ volumes:
 
 ## 11. 文档导航
 
-本项目包含以下技术文档：
+### 11.1 文档分类
+
+```
+docs/
+├── architecture/                    # 架构文档
+│   ├── SynPharm项目整体架构培训文档.md
+│   └── 基于Springboot和FastAPI双后端框架的预测核心模块技术设计文档.md
+├── modules/
+│   ├── auth/                        # 认证模块文档
+│   │   ├── 用户认证模块技术设计文档.md
+│   │   └── 用户认证模块开发指南.md
+│   └── predict/                     # 预测模块文档
+│       ├── AI预测核心模块技术开发文档.md                    # 总览文档
+│       ├── AI预测核心模块-SpringBoot后端技术开发文档.md       # SpringBoot后端文档
+│       ├── AI预测核心模块-FastAPI算法引擎技术开发文档.md      # FastAPI文档
+│       ├── 数据流开发操作文档.md                            # 数据流开发指南
+│       ├── algorithm/                # 算法执行器开发文档
+│       │   ├── DTI算法开发操作文档.md
+│       │   ├── PPI算法开发操作文档.md
+│       │   └── DDI算法开发操作文档.md
+│       └── data/                     # 输入输出解析器开发文档
+│           ├── UniProt输入解析器开发操作文档.md
+│           ├── PDB输入解析器开发操作文档.md
+│           └── CSV输入解析器开发操作文档.md
+├── development/                     # 开发规范
+│   ├── 开发规范与工程指南.md
+│   └── 组员任务清单.md
+└── deploy/                          # 部署文档
+    └── 部署指南.md
+```
+
+### 11.2 文档说明
 
 | 文档 | 路径 | 说明 |
 | :--- | :--- | :--- |
-| **总览文档** | [AI预测核心模块技术开发文档.md](file:///d:/SynPharm/docs/AI预测核心模块技术开发文档.md) | 项目整体架构、技术栈、核心流程 |
-| **用户认证模块** | [用户认证模块技术设计文档.md](file:///d:/SynPharm/docs/用户认证模块技术设计文档.md) | 用户注册登录、JWT认证、权限控制 |
-| **SpringBoot预测模块** | [AI预测核心模块-SpringBoot后端技术开发文档.md](file:///d:/SynPharm/docs/AI预测核心模块-SpringBoot后端技术开发文档.md) | 业务逻辑、任务管理、文件处理 |
-| **FastAPI预测模块** | [AI预测核心模块-FastAPI算法引擎技术开发文档.md](file:///d:/SynPharm/docs/AI预测核心模块-FastAPI算法引擎技术开发文档.md) | 模型加载、GPU推理、算法服务 |
+| **总览文档** | [AI预测核心模块技术开发文档.md](file:///d:/SynPharm/docs/modules/predict/AI预测核心模块技术开发文档.md) | 项目整体架构、技术栈、核心流程 |
+| **架构培训文档** | [SynPharm项目整体架构培训文档.md](file:///d:/SynPharm/docs/architecture/SynPharm项目整体架构培训文档.md) | 项目架构培训材料 |
+| **用户认证模块** | [用户认证模块技术设计文档.md](file:///d:/SynPharm/docs/modules/auth/用户认证模块技术设计文档.md) | 用户注册登录、JWT认证、权限控制 |
+| **SpringBoot预测模块** | [AI预测核心模块-SpringBoot后端技术开发文档.md](file:///d:/SynPharm/docs/modules/predict/AI预测核心模块-SpringBoot后端技术开发文档.md) | 管道机制、业务逻辑、任务管理 |
+| **FastAPI预测模块** | [AI预测核心模块-FastAPI算法引擎技术开发文档.md](file:///d:/SynPharm/docs/modules/predict/AI预测核心模块-FastAPI算法引擎技术开发文档.md) | 模型加载、路由匹配、算法服务 |
+| **数据流开发指南** | [数据流开发操作文档.md](file:///d:/SynPharm/docs/modules/predict/数据流开发操作文档.md) | 项目已有组件与待开发组件说明 |
 
 ---
 
-**版本**: v3.0.0  
-**更新日期**: 2026-07-25  
+**版本**: v4.0.0  
+**更新日期**: 2026-07-26  
 **适用范围**: SynPharm AI预测核心模块整体架构与设计  
-**更新内容**: 重构为总览性文档，整合四个文档结构
+**更新内容**: 添加管道机制说明，更新项目结构，完善文档导航

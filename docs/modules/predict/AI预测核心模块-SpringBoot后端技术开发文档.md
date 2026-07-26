@@ -56,18 +56,24 @@ SpringBoot后端是 SynPharm AI预测核心模块的**业务中台**，负责处
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                    SpringBoot 业务中台                                      │
+│                    SpringBoot 业务中台（管道机制）                          │
 │                                                                             │
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
 │  │  Controller层                                                       │    │
-│  │  PredictController → /api/predict/dti                              │    │
+│  │  PredictController → /api/predict/*                                │    │
 │  │  BatchUploadController → /api/batch/upload                         │    │
 │  │  UserController → /api/auth/login                                  │    │
 │  │              ↓                                                      │    │
 │  │  Service层                                                         │    │
-│  │  PredictServiceImpl → 调用FastAPI                                   │    │
-│  │  BatchProcessServiceImpl → 异步批量处理                              │    │
+│  │  PredictServiceImpl → 调用管道工厂                                   │    │
+│  │  BatchProcessServiceImpl → Redis进度+异步批量处理                     │    │
 │  │  UserServiceImpl → 用户认证逻辑                                     │    │
+│  │              ↓                                                      │    │
+│  │  Pipeline层（策略模式）                                             │    │
+│  │  DataPipelineFactory → 动态组合策略                                 │    │
+│  │     ├── InputParser → 解析输入（SMILES/UniProt/PDB/CSV）           │    │
+│  │     ├── AlgoExecutor → 执行算法（DTI/PPI/DDI）                    │    │
+│  │     └── OutputFormatter → 格式化输出（JSON/CSV）                   │    │
 │  │              ↓                                                      │    │
 │  │  Client层                                                          │    │
 │  │  FastApiClient → WebClient调用FastAPI接口                            │    │
@@ -85,7 +91,7 @@ SpringBoot后端是 SynPharm AI预测核心模块的**业务中台**，负责处
 │                                                                             │
 │  ┌──────────────────┐   ┌──────────────────┐   ┌──────────────────┐        │
 │  │  FastAPI         │   │   MySQL          │   │  Redis           │        │
-│  │  /v1/predict/    │   │   数据库         │   │  缓存(可选)      │        │
+│  │  /v1/predict/    │   │   数据库         │   │  缓存/进度存储    │        │
 │  └──────────────────┘   └──────────────────┘   └──────────────────┘        │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -108,6 +114,18 @@ synpharm-backend/
 │   │       ├── PredictServiceImpl.java
 │   │       ├── BatchProcessServiceImpl.java
 │   │       └── UserServiceImpl.java
+│   ├── pipeline/                  # 管道机制（策略模式）
+│   │   ├── InputParser.java          # 输入解析器接口
+│   │   ├── AlgoExecutor.java         # 算法执行器接口
+│   │   ├── OutputFormatter.java      # 输出格式化器接口
+│   │   ├── PipelineFactory.java      # 管道工厂接口
+│   │   ├── DataPipelineFactory.java  # 管道工厂实现
+│   │   ├── ParsedInput.java          # 解析后输入DTO
+│   │   └── impl/                     # 管道实现类
+│   │       ├── SmilesInputParser.java
+│   │       ├── DtiAlgoExecutor.java
+│   │       ├── JsonOutputFormatter.java
+│   │       └── ...                   # 待开发实现类
 │   ├── client/                    # 外部服务调用层
 │   │   └── FastApiClient.java
 │   ├── mapper/                    # 数据访问层
@@ -139,7 +157,8 @@ synpharm-backend/
 │   │   └── JwtUtils.java
 │   └── exception/                 # 异常处理
 │       ├── GlobalExceptionHandler.java
-│       └── BusinessException.java
+│       ├── BusinessException.java
+│       └── PipelineException.java    # 管道异常
 ├── src/main/resources/
 │   ├── application.yml            # 配置文件
 │   ├── mapper/                    # MyBatis映射文件
@@ -168,21 +187,52 @@ classDiagram
     }
 
     class PredictServiceImpl {
-        -fastApiClient: FastApiClient
+        -pipelineFactory: PipelineFactory
         -predictRecordMapper: PredictRecordMapper
-        +predictDTI(DTIPredictRequest, Long) PredictResultResponse
-        +predictPPI(PPIPredictRequest, Long) PredictResultResponse
-        +predictDDI(DDIPredictRequest, Long) PredictResultResponse
+        +predict(InputType, AlgoType, OutputType, Object) PredictResultResponse
         +getHistory(Long) List~PredictRecord~
     }
 
     class BatchProcessServiceImpl {
-        -fastApiClient: FastApiClient
+        -pipelineFactory: PipelineFactory
         -batchTaskMapper: BatchTaskMapper
-        -progressCache: ConcurrentHashMap
         +processBatch(String, String) void
         +getProgress(String) BatchProgressResponse
         +saveResult(String, List) void
+    }
+
+    class PipelineFactory {
+        <<interface>>
+        +process(InputType, AlgoType, OutputType, Object) Object
+        +batchProcess(List, AlgoType, OutputType) List
+    }
+
+    class DataPipelineFactory {
+        -inputParsers: Map~InputType, InputParser~
+        -algoExecutors: Map~AlgoType, AlgoExecutor~
+        -outputFormatters: Map~OutputType, OutputFormatter~
+        +process(InputType, AlgoType, OutputType, Object) Object
+        +batchProcess(List, AlgoType, OutputType) List
+    }
+
+    class InputParser {
+        <<interface>>
+        +getInputType() InputType
+        +parse(Object) ParsedInput
+    }
+
+    class AlgoExecutor {
+        <<interface>>
+        +getAlgoType() AlgoType
+        +execute(ParsedInput) Object
+        +batchExecute(List~ParsedInput~) List
+    }
+
+    class OutputFormatter {
+        <<interface>>
+        +getOutputType() OutputType
+        +format(Object) Object
+        +batchFormat(List) List
     }
 
     class FastApiClient {
@@ -203,11 +253,16 @@ classDiagram
 
     PredictController --> PredictServiceImpl : uses
     BatchUploadController --> BatchProcessServiceImpl : uses
-    PredictServiceImpl --> FastApiClient : calls
+    PredictServiceImpl --> PipelineFactory : uses
     PredictServiceImpl --> PredictRecordMapper : saves
-    BatchProcessServiceImpl --> FastApiClient : calls
+    BatchProcessServiceImpl --> PipelineFactory : uses
     BatchProcessServiceImpl --> BatchTaskMapper : saves
     BatchProcessServiceImpl --> CsvUtils : uses
+    PipelineFactory <|.. DataPipelineFactory : implements
+    DataPipelineFactory --> InputParser : uses
+    DataPipelineFactory --> AlgoExecutor : uses
+    DataPipelineFactory --> OutputFormatter : uses
+    AlgoExecutor --> FastApiClient : calls
 ```
 
 ---
@@ -1546,7 +1601,7 @@ public class PredictServiceImpl implements PredictService {
 
 ---
 
-**版本**: v3.0.0  
-**更新日期**: 2026-07-25  
+**版本**: v4.0.0  
+**更新日期**: 2026-07-26  
 **适用范围**: SynPharm AI预测核心模块 SpringBoot后端开发与运维  
-**更新内容**: 与总文档结构保持一致，完善代码示例和部署指南
+**更新内容**: 添加管道机制（策略模式）说明，更新架构图和类关系图
