@@ -1,7 +1,9 @@
 package com.synpharm.service.impl;
 
 import com.synpharm.dto.request.LoginRequest;
+import com.synpharm.dto.request.RegisterRequest;
 import com.synpharm.dto.response.LoginResponse;
+import com.synpharm.dto.response.UserResponse;
 import com.synpharm.exception.BusinessException;
 import com.synpharm.exception.ErrorCode;
 import com.synpharm.model.entity.SysLoginLog;
@@ -16,13 +18,15 @@ import com.synpharm.utils.JwtUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 
 @Slf4j
 @Service
@@ -35,7 +39,7 @@ public class AuthServiceImpl implements AuthService {
     private final SysLoginLogMapper loginLogMapper;
     private final SysUserMapper userMapper;
     private final CaptchaService captchaService;
-    private final BCryptPasswordEncoder passwordEncoder;
+    private final PasswordEncoder passwordEncoder;
 
     private static final String LOGIN_FAIL_KEY = "login:fail:";
     private static final String LOGIN_LOCK_KEY = "login:lock:";
@@ -76,7 +80,61 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    public LoginResponse register(RegisterRequest request, HttpServletRequest httpRequest) {
+        String email = request.getEmail();
+
+        // ========== 第一步：检查邮箱是否已注册 ==========
+        if (userMapper.selectByEmail(email) != null) {
+            log.warn("注册-邮箱已存在, email: {}", email);
+            throw new BusinessException(ErrorCode.USER_EXISTS, "该邮箱已注册，请直接登录");
+        }
+
+        // ========== 第二步：校验验证码（type=register） ==========
+        boolean captchaValid = captchaService.verifyCaptcha(email, request.getCaptcha(), "register");
+        if (!captchaValid) {
+            log.warn("注册-验证码校验失败, email: {}", email);
+            throw new BusinessException(ErrorCode.CAPTCHA_ERROR, "验证码错误或已过期");
+        }
+
+        // ========== 第三步：创建用户 ==========
+        SysUser user = new SysUser();
+        user.setEmail(email);
+        user.setNickname(request.getNickname());
+        user.setPassword(passwordEncoder.encode(request.getPassword()));
+        user.setRole("user");
+        user.setStatus(1);
+        user.setEmailVerified(1);
+        user.setRegisterType("qq_email");
+        user.setLoginCount(0);
+        try {
+            userMapper.insert(user);
+        } catch (DuplicateKeyException e) {
+            log.warn("注册-并发冲突, email: {}", email);
+            throw new BusinessException(ErrorCode.USER_EXISTS, "该邮箱已注册，请直接登录");
+        }
+        log.info("注册成功, userId: {}, email: {}", user.getId(), email);
+
+        // ========== 第四步：生成Token并自动登录 ==========
+        String token = jwtUtils.generateToken(user.getId(), user.getEmail(), user.getRole());
+        String ip = IpUtils.getClientIp(httpRequest);
+        userMapper.updateLoginInfo(user.getId(), LocalDateTime.now(), ip, LocalDateTime.now());
+
+        return LoginResponse.builder()
+                .accessToken(token)
+                .tokenType("Bearer")
+                .expiresIn(jwtUtils.getExpiration() / 1000)
+                .isNewUser(true)
+                .user(UserResponse.fromEntity(user))
+                .build();
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
     public void resetPassword(String email, String captcha, String newPassword) {
+        if (newPassword == null || !Pattern.matches(LoginRequest.PASSWORD_REGEX, newPassword)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "密码至少8位，必须包含大小写字母和数字");
+        }
+
         boolean captchaValid = captchaService.verifyCaptcha(email, captcha, "reset");
         if (!captchaValid) {
             log.warn("忘记密码验证码校验失败, email: {}", email);

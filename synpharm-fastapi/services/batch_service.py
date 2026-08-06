@@ -1,7 +1,10 @@
 from typing import List
+import logging
 from services.dti_service import DTIService
 from services.ppi_service import PPIService
 from services.ddi_service import DDIService
+
+logger = logging.getLogger(__name__)
 
 
 class BatchPredictor:
@@ -22,7 +25,7 @@ class BatchPredictor:
                 result_dict.update(item)
                 results.append(result_dict)
             except Exception as e:
-                print(f"预测失败: {e}")
+                logger.warning("批量预测单条失败: %s", e)
                 results.append({"error": str(e), **item})
 
         return results

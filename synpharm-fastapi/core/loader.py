@@ -1,6 +1,6 @@
 from torch import load, device as torch_device, nn
 from pathlib import Path
-from core.config import settings
+from config import settings
 
 
 class ModelLoader:

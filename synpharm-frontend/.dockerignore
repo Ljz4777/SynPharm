@@ -1,0 +1,29 @@
+# ===== 依赖与构建产物 =====
+node_modules/
+dist/
+dist-ssr/
+.vite/
+*.tsbuildinfo
+
+# ===== 敏感配置 =====
+.env
+.env.local
+.env.*.local
+
+# ===== 日志 =====
+*.log
+npm-debug.log*
+
+# ===== 版本控制 / IDE =====
+.git
+.gitignore
+.idea/
+.vscode/
+
+# ===== Docker 相关 =====
+Dockerfile
+.dockerignore
+
+# ===== 文档 =====
+README.md
+LICENSE

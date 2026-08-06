@@ -5,6 +5,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.util.StringUtils;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import java.time.Duration;
@@ -21,12 +22,21 @@ public class WebClientConfig {
     @Value("${fastapi.timeout-batch}")
     private int timeoutBatch;
 
+    @Value("${fastapi.api-key:}")
+    private String apiKey;
+
     @Bean
     public WebClient fastApiWebClient() {
-        return WebClient.builder()
+        WebClient.Builder builder = WebClient.builder()
                 .baseUrl(baseUrl)
-                .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-                .build();
+                .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE);
+
+        // 配置了 API Key 时，调用算法引擎自动携带 X-API-Key 请求头
+        if (StringUtils.hasText(apiKey)) {
+            builder.defaultHeader("X-API-Key", apiKey);
+        }
+
+        return builder.build();
     }
 
     @Bean("singleTimeout")

@@ -1,10 +1,14 @@
 import { defineStore } from 'pinia'
-import type { User, LoginCredentials, LoginResult } from '@/types'
-import { authApi } from '@/api/auth'
+import type { User, LoginCredentials, LoginResult, RegisterCredentials } from '@/types'
+import { authApi, type UserDTO } from '@/api/auth'
 
 export interface SendCaptchaResult {
   success: boolean
   message: string
+  /** 是否开发模式（未配置发件邮箱，验证码直接返回给前端显示） */
+  devMode?: boolean
+  /** 开发模式下返回的验证码 */
+  code?: string
 }
 
 const STORAGE_KEY = {
@@ -15,9 +19,14 @@ const STORAGE_KEY = {
 
 const USE_MOCK = import.meta.env.VITE_ENABLE_MOCK === 'true'
 
-const generateId = (): string => {
-  return 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9)
-}
+/** 将后端用户 DTO 归一化为前端 User 类型（字段名/类型对齐） */
+const normalizeUser = (user: UserDTO): User => ({
+  id: String(user.id),
+  email: user.email,
+  nickname: user.nickname,
+  avatar: user.avatarUrl || '',
+  createdAt: user.createdAt || ''
+})
 
 const MOCK_USERS: Array<{ email: string; password: string; user: User }> = [
   {
@@ -74,23 +83,57 @@ export const useAuthStore = defineStore('auth', {
       
       try {
         const response = await authApi.login(credentials)
-        this.user = response.user
-        this.token = response.token
+        this.user = normalizeUser(response.user)
+        this.token = response.accessToken
         this.isLoggedIn = true
         this.isGuest = credentials.loginType === 'guest'
 
-        localStorage.setItem(STORAGE_KEY.USER, JSON.stringify(response.user))
-        localStorage.setItem(STORAGE_KEY.TOKEN, response.token)
+        localStorage.setItem(STORAGE_KEY.USER, JSON.stringify(this.user))
+        localStorage.setItem(STORAGE_KEY.TOKEN, this.token)
         localStorage.setItem(STORAGE_KEY.IS_GUEST, String(credentials.loginType === 'guest'))
 
         return {
           success: true,
           message: '登录成功',
-          user: response.user,
-          token: response.token
+          user: this.user,
+          token: this.token
         }
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : '登录失败'
+        return {
+          success: false,
+          message
+        }
+      }
+    },
+
+    async register(credentials: RegisterCredentials): Promise<LoginResult> {
+      if (USE_MOCK) {
+        return {
+          success: false,
+          message: '当前为演示模式，请关闭 Mock 后使用注册功能'
+        }
+      }
+
+      try {
+        const response = await authApi.register(credentials)
+        this.user = normalizeUser(response.user)
+        this.token = response.accessToken
+        this.isLoggedIn = true
+        this.isGuest = false
+
+        localStorage.setItem(STORAGE_KEY.USER, JSON.stringify(this.user))
+        localStorage.setItem(STORAGE_KEY.TOKEN, this.token)
+        localStorage.setItem(STORAGE_KEY.IS_GUEST, 'false')
+
+        return {
+          success: true,
+          message: '注册成功，已自动登录',
+          user: this.user,
+          token: this.token
+        }
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : '注册失败'
         return {
           success: false,
           message
@@ -155,7 +198,7 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
-    async sendCaptcha(email: string, type: 'login' | 'reset'): Promise<SendCaptchaResult> {
+    async sendCaptcha(email: string, type: 'login' | 'register' | 'reset'): Promise<SendCaptchaResult> {
       if (USE_MOCK) {
         await new Promise(resolve => setTimeout(resolve, 500))
         return {
@@ -165,10 +208,12 @@ export const useAuthStore = defineStore('auth', {
       }
       
       try {
-        await authApi.sendCaptcha(email, type)
+        const response = await authApi.sendCaptcha(email, type)
         return {
           success: true,
-          message: '验证码已发送，有效期1分钟'
+          message: '验证码已发送，有效期1分钟',
+          devMode: response.devMode,
+          code: response.code
         }
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : '发送失败'

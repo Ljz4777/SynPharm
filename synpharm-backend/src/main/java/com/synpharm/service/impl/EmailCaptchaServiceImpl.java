@@ -1,19 +1,23 @@
 package com.synpharm.service.impl;
 
+import com.synpharm.dto.response.SendCaptchaResult;
 import com.synpharm.exception.BusinessException;
 import com.synpharm.exception.ErrorCode;
 import com.synpharm.service.CaptchaService;
 import com.synpharm.service.NotifyService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -48,6 +52,10 @@ public class EmailCaptchaServiceImpl implements CaptchaService {
     /** 通知服务（依赖接口，不依赖具体实现） */
     private final NotifyService emailNotifyService;
 
+    /** 发件邮箱（配置了才真实发送邮件；未配置则进入开发模式，验证码回显） */
+    @Value("${QQ_EMAIL:}")
+    private String senderEmail;
+
     /** Redis Key前缀：验证码 */
     private static final String CAPTCHA_KEY = "captcha:email:";
 
@@ -69,8 +77,17 @@ public class EmailCaptchaServiceImpl implements CaptchaService {
      * @param target 目标邮箱
      * @param type   验证码类型（login/register/reset等）
      */
+    /** 允许的验证码类型 */
+    private static final Set<String> ALLOWED_TYPES = Set.of("login", "register", "reset");
+
     @Override
-    public void sendCaptcha(String target, String type) {
+    public SendCaptchaResult sendCaptcha(String target, String type) {
+        // ========== 第〇步：类型白名单校验 ==========
+        if (type == null || !ALLOWED_TYPES.contains(type)) {
+            log.warn("不支持的验证码类型: {}", type);
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "不支持的验证码类型");
+        }
+
         // ========== 第一步：频率限制检查 ==========
         checkSendLimit(target);
 
@@ -82,13 +99,20 @@ public class EmailCaptchaServiceImpl implements CaptchaService {
         String key = CAPTCHA_KEY + type + ":" + target;
         redisTemplate.opsForValue().set(key, code, CAPTCHA_EXPIRE_MINUTES, TimeUnit.MINUTES);
 
-        // ========== 第四步：发送邮件 ==========
+        // ========== 第四步：发送邮件（未配置发件邮箱则进入开发模式回显） ==========
+        if (!StringUtils.hasText(senderEmail)) {
+            // 开发模式：不发邮件，验证码直接返回给前端 + 打印日志，方便本地/无服务器环境联调
+            log.warn("[开发模式] 未配置发件邮箱 QQ_EMAIL，验证码不会发送到邮箱。target={}, code={}", target, code);
+            return SendCaptchaResult.builder().devMode(true).code(code).build();
+        }
+
         Map<String, String> params = new HashMap<>();
         params.put("code", code);
         params.put("minutes", String.valueOf(CAPTCHA_EXPIRE_MINUTES));
         emailNotifyService.send(target, "captcha", params);
 
         log.info("邮箱验证码发送成功, target: {}, type: {}", target, type);
+        return SendCaptchaResult.builder().devMode(false).build();
     }
 
     /**

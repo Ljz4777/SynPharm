@@ -35,6 +35,17 @@ public class BusinessException extends RuntimeException {
     }
 
     /**
+     * 构造函数（仅消息，使用默认错误码 BAD_REQUEST）
+     * <p>用于参数/资源校验失败的简洁写法：new BusinessException("提示信息")。
+     *
+     * @param message 自定义错误消息
+     */
+    public BusinessException(String message) {
+        super(message);
+        this.errorCode = ErrorCode.BAD_REQUEST;
+    }
+
+    /**
      * 获取错误码
      * 
      * @return ErrorCode 错误码枚举

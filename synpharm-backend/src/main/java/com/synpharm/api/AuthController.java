@@ -1,8 +1,10 @@
 package com.synpharm.api;
 
 import com.synpharm.dto.request.LoginRequest;
+import com.synpharm.dto.request.RegisterRequest;
 import com.synpharm.dto.request.SendCaptchaRequest;
 import com.synpharm.dto.response.LoginResponse;
+import com.synpharm.dto.response.SendCaptchaResult;
 import com.synpharm.exception.BusinessException;
 import com.synpharm.exception.ErrorCode;
 import com.synpharm.service.AuthService;
@@ -44,6 +46,8 @@ public class AuthController {
             case "qq_email" -> validateByGroup(request, QqEmailLoginGroup.class);
             case "guest" -> {
             }
+            case "password" -> {
+            }
             default -> throw new BusinessException(ErrorCode.BAD_REQUEST,
                     "不支持的登录方式: " + request.getLoginType());
         }
@@ -52,10 +56,9 @@ public class AuthController {
     }
 
     @PostMapping("/captcha/send")
-    @Operation(summary = "发送邮箱验证码", description = "发送6位数字验证码到QQ邮箱，1分钟有效。type=login用于登录，type=reset用于忘记密码")
-    public Result<Void> sendCaptcha(@Valid @RequestBody SendCaptchaRequest request) {
-        captchaService.sendCaptcha(request.getEmail(), request.getType());
-        return Result.success();
+    @Operation(summary = "发送邮箱验证码", description = "发送6位数字验证码到QQ邮箱，1分钟有效。type=login/register/reset")
+    public Result<SendCaptchaResult> sendCaptcha(@Valid @RequestBody SendCaptchaRequest request) {
+        return Result.success(captchaService.sendCaptcha(request.getEmail(), request.getType()));
     }
 
     @PostMapping("/password/reset")
@@ -81,24 +84,11 @@ public class AuthController {
         return Result.success();
     }
 
-    @PostMapping("/debug/login")
-    @Operation(summary = "管理员调试登录", description = "⚠️ 开发调试专用，输入zhihuyaoyan直接登录")
-    public Result<LoginResponse> debugLogin(@RequestBody java.util.Map<String, String> body,
-                                            HttpServletRequest httpRequest) {
-        String captcha = body.get("captcha");
-
-        if (!"zhihuyaoyan".equals(captcha)) {
-            throw new BusinessException(ErrorCode.UNAUTHORIZED, "调试验证码错误");
-        }
-
-        log.warn("⚠️ 管理员调试登录接口被调用！");
-
-        LoginRequest loginRequest = new LoginRequest();
-        loginRequest.setLoginType("qq_email");
-        loginRequest.setEmail("admin@qq.com");
-        loginRequest.setCaptcha("000000");
-
-        return Result.success(authService.login(loginRequest, httpRequest));
+    @PostMapping("/register")
+    @Operation(summary = "用户注册", description = "使用QQ邮箱+密码注册，验证码type=register；注册成功后自动登录")
+    public Result<LoginResponse> register(@Valid @RequestBody RegisterRequest request,
+                                          HttpServletRequest httpRequest) {
+        return Result.success(authService.register(request, httpRequest));
     }
 
     private <T> void validateByGroup(T object, Class<?>... groups) {

@@ -1,6 +1,6 @@
 from core.loader import ModelLoader
 from core.schemas import PredictionMetrics, InteractionInfo
-from services.base_algo import BaseAlgo
+from core.base_algo import BaseAlgo
 import torch
 import numpy as np
 import random

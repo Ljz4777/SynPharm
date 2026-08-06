@@ -73,6 +73,8 @@ file:
 
 fastapi:
   base-url: ${FASTAPI_URL:http://localhost:8000}
+  # 调用算法引擎的 API Key（与 FastAPI 的 API_KEYS 对应；留空则不携带）
+  api-key: ${FASTAPI_API_KEY:}
   timeout-single: ${FASTAPI_TIMEOUT_SINGLE:30000}
   timeout-batch: ${FASTAPI_TIMEOUT_BATCH:60000}
 

@@ -1,0 +1,28 @@
+# ===== Python 缓存/虚拟环境 =====
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+
+# ===== 模型与日志（运行时通过卷挂载，不进镜像）=====
+models/
+logs/
+*.log
+
+# ===== 敏感配置 =====
+.env
+
+# ===== 版本控制 / IDE =====
+.git
+.gitignore
+.idea/
+.vscode/
+
+# ===== Docker 相关 =====
+Dockerfile
+.dockerignore
+
+# ===== 文档 =====
+README.md

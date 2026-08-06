@@ -205,3 +205,15 @@ export const validateNickname = (nickname: string): FieldValidationResult => {
 
   return { valid: true, message: '' }
 }
+
+export const validateConfirmPassword = (password: string, confirm: string): FieldValidationResult => {
+  if (!confirm) {
+    return { valid: false, message: '请再次输入密码' }
+  }
+
+  if (password !== confirm) {
+    return { valid: false, message: '两次输入的密码不一致' }
+  }
+
+  return { valid: true, message: '' }
+}

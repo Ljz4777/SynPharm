@@ -13,6 +13,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Component
@@ -56,16 +57,69 @@ public class DtiAlgoExecutor implements AlgoExecutor {
         
         List<AlgoResponse> responses = new ArrayList<>();
         if (batchResponse != null && batchResponse.getResults() != null) {
-            for (var result : batchResponse.getResults()) {
-                AlgoResponse response = new AlgoResponse();
-                response.setStatus("success");
-                response.setAlgoType(AlgoType.DTI.getCode());
-                response.setMetrics(result.getMetrics());
-                responses.add(response);
+            for (Map<String, Object> result : batchResponse.getResults()) {
+                responses.add(convertResult(result));
             }
         }
         
         log.debug("批量DTI算法执行完成: 结果数量={}", responses.size());
         return responses;
+    }
+
+    /**
+     * 将 FastAPI 批量预测返回的平铺字段（snake_case）转换为统一的 AlgoResponse。
+     * <p>FastAPI /v1/predict/batch 的每个结果形如：
+     * {target_id, target_name, binding_affinity, confidence_score, confidence_level, interactions, ...输入字段}
+     */
+    private AlgoResponse convertResult(Map<String, Object> result) {
+        AlgoResponse response = new AlgoResponse();
+        response.setStatus("success");
+        response.setAlgoType(AlgoType.DTI.getCode());
+
+        AlgoResponse.PredictionMetrics metrics = new AlgoResponse.PredictionMetrics();
+        metrics.setTargetId(toStr(result.get("target_id")));
+        metrics.setTargetName(toStr(result.get("target_name")));
+        metrics.setBindingAffinity(toDouble(result.get("binding_affinity")));
+        metrics.setConfidenceScore(toDouble(result.get("confidence_score")));
+        metrics.setConfidenceLevel(toStr(result.get("confidence_level")));
+        metrics.setInteractions(parseInteractions(result.get("interactions")));
+
+        response.setMetrics(metrics);
+        return response;
+    }
+
+    private String toStr(Object value) {
+        return value == null ? null : String.valueOf(value);
+    }
+
+    private Double toDouble(Object value) {
+        if (value instanceof Number number) {
+            return number.doubleValue();
+        }
+        if (value instanceof String str && !str.isEmpty()) {
+            try {
+                return Double.parseDouble(str);
+            } catch (NumberFormatException ignored) {
+                // 忽略无法解析的数值，返回 null
+            }
+        }
+        return null;
+    }
+
+    private List<AlgoResponse.PredictionMetrics.InteractionInfo> parseInteractions(Object value) {
+        List<AlgoResponse.PredictionMetrics.InteractionInfo> interactions = new ArrayList<>();
+        if (value instanceof List<?> list) {
+            for (Object item : list) {
+                if (item instanceof Map<?, ?> map) {
+                    AlgoResponse.PredictionMetrics.InteractionInfo info =
+                            new AlgoResponse.PredictionMetrics.InteractionInfo();
+                    info.setResidue(toStr(map.get("residue")));
+                    info.setType(toStr(map.get("type")));
+                    info.setDistance(toDouble(map.get("distance")));
+                    interactions.add(info);
+                }
+            }
+        }
+        return interactions;
     }
 }

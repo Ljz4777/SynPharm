@@ -1,0 +1,29 @@
+# ===== 构建产物 =====
+target/
+*.jar
+*.war
+
+# ===== 版本控制 / IDE =====
+.git
+.gitignore
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+
+# ===== 日志与本地数据 =====
+logs/
+log/
+*.log
+uploads/
+results/
+
+# ===== 文档（不需要打进镜像）=====
+docs/
+README.md
+CHANGELOG.md
+
+# ===== Docker 相关（由 compose 统一管理）=====
+Dockerfile
+.dockerignore

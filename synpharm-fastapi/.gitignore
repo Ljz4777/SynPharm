@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# 模型与日志（运行时卷挂载）
+models/*
+!models/.gitkeep
+logs/
+*.log
+
+# 敏感配置
+.env
+
+# IDE
+.idea/
+.vscode/

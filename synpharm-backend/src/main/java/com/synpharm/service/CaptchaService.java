@@ -1,5 +1,7 @@
 package com.synpharm.service;
 
+import com.synpharm.dto.response.SendCaptchaResult;
+
 /**
  * 验证码服务接口
  *
@@ -16,8 +18,9 @@ public interface CaptchaService {
      *
      * @param target 发送目标（邮箱/手机号）
      * @param type   验证码类型（注册/登录/找回密码等）
+     * @return 发送结果（devMode=true 时携带验证码用于本地回显）
      */
-    void sendCaptcha(String target, String type);
+    SendCaptchaResult sendCaptcha(String target, String type);
 
     /**
      * 验证验证码是否正确

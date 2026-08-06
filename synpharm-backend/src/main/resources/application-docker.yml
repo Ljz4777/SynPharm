@@ -4,9 +4,9 @@ spring:
 
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://mysql:3306/synpharm?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
-    username: ${MYSQL_USERNAME:synpharm}
-    password: ${MYSQL_PASSWORD:synpharm_pass}
+    url: jdbc:mysql://${DB_HOST:mysql}:${DB_PORT:3306}/${DB_NAME:synpharm}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
+    username: ${DB_USERNAME:synpharm}
+    password: ${DB_PASSWORD:synpharm_pass}
 
   data:
     redis:
@@ -49,11 +49,25 @@ mybatis-plus:
       logic-not-delete-value: 0
 
 jwt:
-  secret: ${JWT_SECRET:SynPharmSecretKey2024ForJWTTokenGeneration}
+  # 安全关键：必须在环境变量中提供强随机密钥（>=32字节），未提供则启动即失败（fail-fast）
+  secret: ${JWT_SECRET:}
   expiration: ${JWT_EXPIRATION:86400000}
 
 server:
   port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+  health:
+    # 邮箱为可选功能（未配置 QQ_EMAIL 时不影响服务健康，避免 SMTP 认证失败拖垮健康检查）
+    mail:
+      enabled: false
 
 knife4j:
   enable: true
@@ -61,6 +75,8 @@ knife4j:
     language: zh_cn
 
 logging:
+  # 调用算法引擎的 API Key（与 FASTAPI_API_KEYS 对应；留空则不携带）
+  api-key: ${FASTAPI_API_KEY:}
   level:
     com.synpharm: debug
     com.baomidou.mybatisplus: info

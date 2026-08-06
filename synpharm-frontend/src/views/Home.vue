@@ -13,7 +13,6 @@
         </nav>
         <div class="home__header-actions">
           <router-link to="/login" class="home__btn home__btn--outline">登录</router-link>
-          <router-link to="/register" class="home__btn home__btn--primary">注册</router-link>
         </div>
       </div>
     </header>

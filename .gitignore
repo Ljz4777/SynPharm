@@ -18,6 +18,10 @@ synpharm-frontend/.env
 synpharm-frontend/.env.local
 synpharm-frontend/.env.*.local
 
+# ============== 部署环境变量（含敏感信息，不要提交！） ==============
+deploy/.env
+deploy/.env.local
+
 # ============== IDE / 编辑器 ==============
 .idea/
 .vscode/

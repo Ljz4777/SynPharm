@@ -31,78 +31,176 @@
           ← 返回首页
         </router-link>
         
-        <h3 class="login__form-title">欢迎回来</h3>
+        <h3 class="login__form-title">{{ mode === 'login' ? '欢迎回来' : '创建账号' }}</h3>
         
-        <form @submit.prevent="handleLogin" class="login__form">
-          <div class="login__form-group">
-            <label class="login__form-label">QQ邮箱</label>
-            <div class="login__input-wrapper">
-              <span class="login__input-icon">📧</span>
-              <input 
-                v-model="email"
-                type="email"
-                autocomplete="email"
-                class="login__form-input"
-                :class="{ 'login__form-input--error': errors.email }"
-                placeholder="请输入QQ邮箱"
-                @blur="validateEmail"
-                @input="errors.email && validateEmail()"
-              />
-            </div>
-            <span v-if="errors.email" class="login__form-error">{{ errors.email }}</span>
+        <!-- 模式切换：登录 / 注册 -->
+        <div class="login__tabs">
+          <button
+            type="button"
+            class="login__tab"
+            :class="{ 'login__tab--active': mode === 'login' }"
+            @click="switchMode('login')"
+          >登录</button>
+          <button
+            type="button"
+            class="login__tab"
+            :class="{ 'login__tab--active': mode === 'register' }"
+            @click="switchMode('register')"
+          >注册</button>
+        </div>
+        
+        <!-- ===================== 登录模式 ===================== -->
+        <template v-if="mode === 'login'">
+          <!-- 登录方式子切换：验证码 / 密码 -->
+          <div class="login__tabs login__tabs--sub">
+            <button
+              type="button"
+              class="login__tab"
+              :class="{ 'login__tab--active': loginMethod === 'captcha' }"
+              @click="loginMethod = 'captcha'"
+            >验证码登录</button>
+            <button
+              type="button"
+              class="login__tab"
+              :class="{ 'login__tab--active': loginMethod === 'password' }"
+              @click="loginMethod = 'password'"
+            >密码登录</button>
           </div>
           
-          <div class="login__form-group">
-            <label class="login__form-label">验证码</label>
-            <div class="login__input-wrapper login__input-wrapper--captcha">
-              <span class="login__input-icon">🔑</span>
-              <input 
-                v-model="captcha"
-                type="text"
-                maxlength="6"
-                class="login__form-input login__form-input--captcha"
-                :class="{ 'login__form-input--error': errors.captcha }"
-                placeholder="请输入6位验证码"
-                @blur="validateCaptcha"
-                @input="errors.captcha && validateCaptcha()"
-              />
+          <!-- 验证码登录 -->
+          <form v-if="loginMethod === 'captcha'" @submit.prevent="handleCaptchaLogin" class="login__form">
+            <div class="login__form-group">
+              <label class="login__form-label">QQ邮箱</label>
+              <div class="login__input-wrapper">
+                <span class="login__input-icon">📧</span>
+                <input 
+                  v-model="email"
+                  type="email"
+                  autocomplete="email"
+                  class="login__form-input"
+                  :class="{ 'login__form-input--error': errors.email }"
+                  placeholder="请输入QQ邮箱"
+                  @blur="validateEmail"
+                  @input="errors.email && validateEmail()"
+                />
+              </div>
+              <span v-if="errors.email" class="login__form-error">{{ errors.email }}</span>
+            </div>
+            
+            <div class="login__form-group">
+              <label class="login__form-label">验证码</label>
+              <div class="login__input-wrapper login__input-wrapper--captcha">
+                <span class="login__input-icon">🔑</span>
+                <input 
+                  v-model="captcha"
+                  type="text"
+                  maxlength="6"
+                  class="login__form-input login__form-input--captcha"
+                  :class="{ 'login__form-input--error': errors.captcha }"
+                  placeholder="请输入6位验证码"
+                  @blur="validateCaptcha"
+                  @input="errors.captcha && validateCaptcha()"
+                />
+                <button 
+                  type="button"
+                  class="login__captcha-btn"
+                  :disabled="isCaptchaSending || captchaCountdown > 0"
+                  @click="handleSendCaptcha"
+                >
+                  {{ captchaCountdown > 0 ? `${captchaCountdown}s` : '获取验证码' }}
+                </button>
+              </div>
+              <span v-if="errors.captcha" class="login__form-error">{{ errors.captcha }}</span>
+            </div>
+            
+            <div v-if="captchaHint" class="login__form-message login__form-message--success">{{ captchaHint }}</div>
+            
+            <div class="login__form-group login__form-group--remember">
+              <label class="login__form-checkbox">
+                <input 
+                  v-model="rememberMe"
+                  type="checkbox" 
+                  class="login__checkbox"
+                />
+                <span class="login__checkbox-checkmark"></span>
+                <span>记住我</span>
+              </label>
               <button 
                 type="button"
-                class="login__captcha-btn"
-                :disabled="isCaptchaSending || captchaCountdown > 0"
-                @click="handleSendCaptcha"
-              >
-                {{ captchaCountdown > 0 ? `${captchaCountdown}s` : '获取验证码' }}
-              </button>
+                class="login__form-link"
+                @click="showResetModal = true"
+              >忘记密码?</button>
             </div>
-            <span v-if="errors.captcha" class="login__form-error">{{ errors.captcha }}</span>
-          </div>
-          
-          <div class="login__form-group login__form-group--remember">
-            <label class="login__form-checkbox">
-              <input 
-                v-model="rememberMe"
-                type="checkbox" 
-                class="login__checkbox"
-              />
-              <span class="login__checkbox-checkmark"></span>
-              <span>记住我</span>
-            </label>
+            
             <button 
-              type="button"
-              class="login__form-link"
-              @click="showResetModal = true"
-            >忘记密码?</button>
-          </div>
+              type="submit" 
+              class="login__form-btn"
+              :disabled="isLoading"
+            >
+              <span v-if="isLoading" class="login__btn-spinner"></span>
+              {{ isLoading ? '登录中...' : '登录' }}
+            </button>
+          </form>
           
-          <button 
-            type="submit" 
-            class="login__form-btn"
-            :disabled="isLoading"
-          >
-            <span v-if="isLoading" class="login__btn-spinner"></span>
-            {{ isLoading ? '登录中...' : '登录' }}
-          </button>
+          <!-- 密码登录 -->
+          <form v-else @submit.prevent="handlePasswordLogin" class="login__form">
+            <div class="login__form-group">
+              <label class="login__form-label">QQ邮箱</label>
+              <div class="login__input-wrapper">
+                <span class="login__input-icon">📧</span>
+                <input 
+                  v-model="email"
+                  type="email"
+                  autocomplete="email"
+                  class="login__form-input"
+                  :class="{ 'login__form-input--error': errors.email }"
+                  placeholder="请输入QQ邮箱"
+                  @blur="validateEmail"
+                  @input="errors.email && validateEmail()"
+                />
+              </div>
+              <span v-if="errors.email" class="login__form-error">{{ errors.email }}</span>
+            </div>
+            
+            <div class="login__form-group">
+              <label class="login__form-label">密码</label>
+              <div class="login__input-wrapper">
+                <span class="login__input-icon">🔒</span>
+                <input 
+                  v-model="loginPassword"
+                  type="password"
+                  autocomplete="current-password"
+                  class="login__form-input"
+                  :class="{ 'login__form-input--error': errors.loginPassword }"
+                  placeholder="请输入密码"
+                  @blur="validateLoginPassword"
+                  @input="errors.loginPassword && validateLoginPassword()"
+                />
+              </div>
+              <span v-if="errors.loginPassword" class="login__form-error">{{ errors.loginPassword }}</span>
+            </div>
+            
+            <div class="login__form-group login__form-group--remember">
+              <button 
+                type="button"
+                class="login__form-link"
+                @click="showResetModal = true"
+              >忘记密码?</button>
+            </div>
+            
+            <button 
+              type="submit" 
+              class="login__form-btn"
+              :disabled="isLoading"
+            >
+              <span v-if="isLoading" class="login__btn-spinner"></span>
+              {{ isLoading ? '登录中...' : '登录' }}
+            </button>
+          </form>
+          
+          <div v-if="loginError" class="login__form-message login__form-message--error">
+            {{ loginError }}
+          </div>
           
           <div class="login__divider">
             <span class="login__divider-text">或</span>
@@ -115,10 +213,121 @@
           >
             游客模式
           </button>
+        </template>
+        
+        <!-- ===================== 注册模式 ===================== -->
+        <form v-else @submit.prevent="handleRegister" class="login__form">
+          <div class="login__form-group">
+            <label class="login__form-label">QQ邮箱</label>
+            <div class="login__input-wrapper">
+              <span class="login__input-icon">📧</span>
+              <input 
+                v-model="regEmail"
+                type="email"
+                autocomplete="email"
+                class="login__form-input"
+                :class="{ 'login__form-input--error': errors.regEmail }"
+                placeholder="请输入QQ邮箱"
+                @blur="validateRegEmail"
+                @input="errors.regEmail && validateRegEmail()"
+              />
+            </div>
+            <span v-if="errors.regEmail" class="login__form-error">{{ errors.regEmail }}</span>
+          </div>
+          
+          <div class="login__form-group">
+            <label class="login__form-label">昵称</label>
+            <div class="login__input-wrapper">
+              <span class="login__input-icon">👤</span>
+              <input 
+                v-model="regNickname"
+                type="text"
+                class="login__form-input"
+                :class="{ 'login__form-input--error': errors.regNickname }"
+                placeholder="2-20位中文、字母、数字"
+                @blur="validateRegNickname"
+                @input="errors.regNickname && validateRegNickname()"
+              />
+            </div>
+            <span v-if="errors.regNickname" class="login__form-error">{{ errors.regNickname }}</span>
+          </div>
+          
+          <div class="login__form-group">
+            <label class="login__form-label">密码</label>
+            <div class="login__input-wrapper">
+              <span class="login__input-icon">🔒</span>
+              <input 
+                v-model="regPassword"
+                type="password"
+                autocomplete="new-password"
+                class="login__form-input"
+                :class="{ 'login__form-input--error': errors.regPassword }"
+                placeholder="至少8位，含大小写字母和数字"
+                @blur="validateRegPassword"
+                @input="errors.regPassword && validateRegPassword()"
+              />
+            </div>
+            <span v-if="errors.regPassword" class="login__form-error">{{ errors.regPassword }}</span>
+          </div>
+          
+          <div class="login__form-group">
+            <label class="login__form-label">确认密码</label>
+            <div class="login__input-wrapper">
+              <span class="login__input-icon">🔒</span>
+              <input 
+                v-model="regConfirmPassword"
+                type="password"
+                autocomplete="new-password"
+                class="login__form-input"
+                :class="{ 'login__form-input--error': errors.regConfirmPassword }"
+                placeholder="请再次输入密码"
+                @blur="validateRegConfirmPassword"
+                @input="errors.regConfirmPassword && validateRegConfirmPassword()"
+              />
+            </div>
+            <span v-if="errors.regConfirmPassword" class="login__form-error">{{ errors.regConfirmPassword }}</span>
+          </div>
+          
+          <div class="login__form-group">
+            <label class="login__form-label">验证码</label>
+            <div class="login__input-wrapper login__input-wrapper--captcha">
+              <span class="login__input-icon">🔑</span>
+              <input 
+                v-model="regCaptcha"
+                type="text"
+                maxlength="6"
+                class="login__form-input login__form-input--captcha"
+                :class="{ 'login__form-input--error': errors.regCaptcha }"
+                placeholder="请输入6位验证码"
+                @blur="validateRegCaptcha"
+                @input="errors.regCaptcha && validateRegCaptcha()"
+              />
+              <button 
+                type="button"
+                class="login__captcha-btn"
+                :disabled="isCaptchaSending || captchaCountdown > 0"
+                @click="handleSendRegisterCaptcha"
+              >
+                {{ captchaCountdown > 0 ? `${captchaCountdown}s` : '获取验证码' }}
+              </button>
+            </div>
+            <span v-if="errors.regCaptcha" class="login__form-error">{{ errors.regCaptcha }}</span>
+          </div>
+          
+          <div v-if="captchaHint" class="login__form-message login__form-message--success">{{ captchaHint }}</div>
+          
+          <button 
+            type="submit" 
+            class="login__form-btn"
+            :disabled="isLoading"
+          >
+            <span v-if="isLoading" class="login__btn-spinner"></span>
+            {{ isLoading ? '注册中...' : '注册' }}
+          </button>
         </form>
         
-        <div v-if="loginError" class="login__form-message login__form-message--error">
-          {{ loginError }}
+        <div v-if="registerError" class="login__form-message login__form-message--error">
+          {{ registerError }}
         </div>
       </div>
     </div>
@@ -166,6 +375,9 @@
             />
           </div>
         </div>
+        <div v-if="resetHint" class="login__form-message login__form-message--success">
+          {{ resetHint }}
+        </div>
         <div v-if="resetError" class="login__form-message login__form-message--error">
           {{ resetError }}
         </div>
@@ -182,16 +394,32 @@
 import { ref, reactive, onUnmounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useRouter } from 'vue-router'
-import { validateQqEmail } from '@/utils/validators'
+import { validateQqEmail, validatePassword, validateNickname, validateConfirmPassword } from '@/utils/validators'
 
 const authStore = useAuthStore()
 const router = useRouter()
 
+const mode = ref<'login' | 'register'>('login')
+const loginMethod = ref<'captcha' | 'password'>('captcha')
+
+// 登录（验证码 / 密码）
 const email = ref('')
 const captcha = ref('')
+const loginPassword = ref('')
+
+// 注册
+const regEmail = ref('')
+const regNickname = ref('')
+const regPassword = ref('')
+const regConfirmPassword = ref('')
+const regCaptcha = ref('')
+
 const rememberMe = ref(false)
 const isLoading = ref(false)
 const loginError = ref('')
+const registerError = ref('')
+const captchaHint = ref('')
+const resetHint = ref('')
 
 const isCaptchaSending = ref(false)
 const captchaCountdown = ref(0)
@@ -207,8 +435,21 @@ let resetCaptchaTimer: number | null = null
 
 const errors = reactive({
   email: '',
-  captcha: ''
+  captcha: '',
+  loginPassword: '',
+  regEmail: '',
+  regNickname: '',
+  regPassword: '',
+  regConfirmPassword: '',
+  regCaptcha: ''
 })
+
+const switchMode = (m: 'login' | 'register') => {
+  mode.value = m
+  loginError.value = ''
+  registerError.value = ''
+  captchaHint.value = ''
+}
 
 const validateEmail = (): boolean => {
   const result = validateQqEmail(email.value)
@@ -229,14 +470,72 @@ const validateCaptcha = (): boolean => {
   return true
 }
 
-const validateForm = (): boolean => {
+const validateLoginPassword = (): boolean => {
+  const result = validatePassword(loginPassword.value)
+  errors.loginPassword = result.valid ? '' : result.message
+  return result.valid
+}
+
+const validateRegEmail = (): boolean => {
+  const result = validateQqEmail(regEmail.value)
+  errors.regEmail = result.valid ? '' : result.message
+  return result.valid
+}
+
+const validateRegNickname = (): boolean => {
+  const result = validateNickname(regNickname.value)
+  errors.regNickname = result.valid ? '' : result.message
+  return result.valid
+}
+
+const validateRegPassword = (): boolean => {
+  const result = validatePassword(regPassword.value)
+  errors.regPassword = result.valid ? '' : result.message
+  return result.valid
+}
+
+const validateRegConfirmPassword = (): boolean => {
+  const result = validateConfirmPassword(regPassword.value, regConfirmPassword.value)
+  errors.regConfirmPassword = result.valid ? '' : result.message
+  return result.valid
+}
+
+const validateRegCaptcha = (): boolean => {
+  if (!regCaptcha.value.trim()) {
+    errors.regCaptcha = '验证码不能为空'
+    return false
+  }
+  if (!/^\d{6}$/.test(regCaptcha.value)) {
+    errors.regCaptcha = '验证码为6位数字'
+    return false
+  }
+  errors.regCaptcha = ''
+  return true
+}
+
+const validateLoginForm = (): boolean => {
   const emailValid = validateEmail()
   const captchaValid = validateCaptcha()
   return emailValid && captchaValid
 }
 
-const handleLogin = async () => {
-  if (!validateForm()) return
+const validatePasswordLoginForm = (): boolean => {
+  const emailValid = validateEmail()
+  const pwdValid = validateLoginPassword()
+  return emailValid && pwdValid
+}
+
+const validateRegisterForm = (): boolean => {
+  const e = validateRegEmail()
+  const n = validateRegNickname()
+  const p = validateRegPassword()
+  const c = validateRegConfirmPassword()
+  const cap = validateRegCaptcha()
+  return e && n && p && c && cap
+}
+
+const handleCaptchaLogin = async () => {
+  if (!validateLoginForm()) return
 
   isLoading.value = true
   loginError.value = ''
@@ -256,6 +555,49 @@ const handleLogin = async () => {
   isLoading.value = false
 }
 
+const handlePasswordLogin = async () => {
+  if (!validatePasswordLoginForm()) return
+
+  isLoading.value = true
+  loginError.value = ''
+  
+  const result = await authStore.login({
+    loginType: 'password',
+    email: email.value.trim(),
+    password: loginPassword.value
+  })
+  
+  if (result.success) {
+    router.push('/dashboard')
+  } else {
+    loginError.value = result.message || '登录失败，请稍后重试'
+  }
+  
+  isLoading.value = false
+}
+
+const handleRegister = async () => {
+  if (!validateRegisterForm()) return
+
+  isLoading.value = true
+  registerError.value = ''
+  
+  const result = await authStore.register({
+    email: regEmail.value.trim(),
+    nickname: regNickname.value.trim(),
+    password: regPassword.value,
+    captcha: regCaptcha.value
+  })
+  
+  if (result.success) {
+    router.push('/dashboard')
+  } else {
+    registerError.value = result.message || '注册失败，请稍后重试'
+  }
+  
+  isLoading.value = false
+}
+
 const handleGuestLogin = async () => {
   const result = await authStore.login({
     loginType: 'guest'
@@ -265,29 +607,58 @@ const handleGuestLogin = async () => {
   }
 }
 
+const startCountdown = () => {
+  captchaCountdown.value = 60
+  captchaTimer = window.setInterval(() => {
+    captchaCountdown.value--
+    if (captchaCountdown.value <= 0) {
+      if (captchaTimer) clearInterval(captchaTimer)
+    }
+  }, 1000)
+}
+
+const showDevCaptchaHint = (result: { devMode?: boolean; code?: string }) => {
+  captchaHint.value = (result.devMode && result.code)
+    ? `[开发模式] 验证码：${result.code}（未配置发件邮箱，不会真正发送邮件）`
+    : ''
+}
+
 const handleSendCaptcha = async () => {
   if (!validateEmail()) return
   
   isCaptchaSending.value = true
+  captchaHint.value = ''
   const result = await authStore.sendCaptcha(email.value.trim(), 'login')
   isCaptchaSending.value = false
   
   if (result.success) {
-    captchaCountdown.value = 60
-    captchaTimer = window.setInterval(() => {
-      captchaCountdown.value--
-      if (captchaCountdown.value <= 0) {
-        if (captchaTimer) clearInterval(captchaTimer)
-      }
-    }, 1000)
+    startCountdown()
+    showDevCaptchaHint(result)
   } else {
     loginError.value = result.message
   }
 }
 
+const handleSendRegisterCaptcha = async () => {
+  if (!validateRegEmail()) return
+  
+  isCaptchaSending.value = true
+  captchaHint.value = ''
+  const result = await authStore.sendCaptcha(regEmail.value.trim(), 'register')
+  isCaptchaSending.value = false
+  
+  if (result.success) {
+    startCountdown()
+    showDevCaptchaHint(result)
+  } else {
+    registerError.value = result.message
+  }
+}
+
 const handleSendResetCaptcha = async () => {
   if (!resetEmail.value) return
-  
+
+  resetHint.value = ''
   const result = await authStore.sendCaptcha(resetEmail.value.trim(), 'reset')
   if (result.success) {
     resetCaptchaCountdown.value = 60
@@ -297,6 +668,9 @@ const handleSendResetCaptcha = async () => {
         if (resetCaptchaTimer) clearInterval(resetCaptchaTimer)
       }
     }, 1000)
+    if (result.devMode && result.code) {
+      resetHint.value = `[开发模式] 验证码：${result.code}`
+    }
   } else {
     resetError.value = result.message
   }
@@ -305,6 +679,12 @@ const handleSendResetCaptcha = async () => {
 const handleResetPassword = async () => {
   if (!resetEmail.value || !resetCaptcha.value || !resetPassword.value) {
     resetError.value = '请填写完整信息'
+    return
+  }
+
+  const pwdCheck = validatePassword(resetPassword.value)
+  if (!pwdCheck.valid) {
+    resetError.value = pwdCheck.message
     return
   }
   
@@ -450,6 +830,43 @@ onUnmounted(() => {
   text-align: center;
 }
 
+.login__tabs {
+  display: flex;
+  gap: $spacing-sm;
+  margin-bottom: $spacing-lg;
+  padding: 4px;
+  background: $bg-tertiary;
+  border-radius: $border-radius-lg;
+
+  &--sub {
+    margin-top: -$spacing-md;
+  }
+}
+
+.login__tab {
+  flex: 1;
+  padding: $spacing-sm $spacing-md;
+  border: none;
+  background: transparent;
+  border-radius: $border-radius-md;
+  font-size: $font-size-base;
+  font-weight: 500;
+  color: $text-secondary;
+  cursor: pointer;
+  transition: all $transition-fast;
+
+  &:hover {
+    color: $text-primary;
+  }
+
+  &--active {
+    background: #ffffff;
+    color: $accent-color;
+    font-weight: 600;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  }
+}
+
 .login__form {
   display: flex;
   flex-direction: column;
@@ -568,6 +985,11 @@ onUnmounted(() => {
   &--error {
     background: rgba(239, 68, 68, 0.1);
     color: $error-color;
+  }
+
+  &--success {
+    background: rgba(16, 185, 129, 0.1);
+    color: #059669;
   }
 }
 

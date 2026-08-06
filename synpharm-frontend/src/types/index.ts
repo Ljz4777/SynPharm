@@ -85,6 +85,13 @@ export interface LoginCredentials {
   phone?: string
 }
 
+export interface RegisterCredentials {
+  email: string
+  nickname: string
+  password: string
+  captcha: string
+}
+
 export interface AuthState {
   user: User | null
   isLoggedIn: boolean

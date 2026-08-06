@@ -64,7 +64,10 @@ public class SecurityConfig {
                 // ---- 公开接口（无需认证） ----
                 .requestMatchers(
                     "/api/auth/login",         // 登录
+                    "/api/auth/register",      // 注册
                     "/api/auth/captcha/send",  // 发送验证码
+                    "/api/auth/password/reset",// 忘记密码
+                    "/actuator/health",        // 健康检查（Docker healthcheck 使用）
                     "/swagger-ui/**",          // Swagger UI
                     "/v3/api-docs/**",         // Swagger API文档
                     "/doc.html",               // Knife4j文档
