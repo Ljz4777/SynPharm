@@ -17,7 +17,7 @@ export interface InputData {
 }
 
 export interface PredictionResult {
-  id: string
+  id: string | number
   targetId: string
   targetName: string
   ligandSmiles: string
@@ -44,15 +44,18 @@ export interface DatasetInfo {
 }
 
 export interface Task {
-  id: string
+  id: string | number
+  taskNo?: string
   name?: string
-  type: 'prediction' | 'validation' | 'batch_screening'
-  status: 'pending' | 'running' | 'completed' | 'failed'
+  type?: string
+  /** 后端 predict_type（dti/ppi/ddi） */
+  predictType?: string
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
   progress: number
-  input: InputData
+  input?: InputData
   resultId?: string
   createdAt: string
-  updatedAt: string
+  updatedAt?: string
 }
 
 export interface ValidationResult {

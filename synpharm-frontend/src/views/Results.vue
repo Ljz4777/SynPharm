@@ -34,29 +34,33 @@
       </section>
       
       <section class="results__list">
-        <div class="results__grid">
-          <ResultCard 
-            v-for="result in filteredResults" 
-            :key="result.id"
-            :result="result"
-            @detail="handleResultDetail"
-            @3d="handleResult3D"
-          />
-        </div>
-        
-        <div v-if="filteredResults.length === 0" class="results__empty">
-          <span class="results__empty-icon">📭</span>
-          <span class="results__empty-text">暂无预测结果</span>
-          <router-link to="/predict" class="results__empty-link">开始预测</router-link>
-        </div>
+        <div v-if="loading" class="results__loading">加载中...</div>
+        <div v-else-if="loadError" class="results__error">{{ loadError }}</div>
+        <template v-else>
+          <div class="results__grid">
+            <ResultCard 
+              v-for="result in filteredResults" 
+              :key="String(result.id)"
+              :result="result"
+              @detail="handleResultDetail"
+              @3d="handleResult3D"
+            />
+          </div>
+          
+          <div v-if="filteredResults.length === 0" class="results__empty">
+            <span class="results__empty-icon">📭</span>
+            <span class="results__empty-text">暂无预测结果</span>
+            <router-link to="/predict" class="results__empty-link">开始预测</router-link>
+          </div>
+        </template>
       </section>
     </main>
   </div>
 </template>
 
 <script setup lang="ts">
-import { reactive, computed } from 'vue'
-import { mockResults } from '@/data/mockResults'
+import { reactive, computed, ref, onMounted } from 'vue'
+import { resultApi } from '@/api/predict'
 import Sidebar from '@/components/Sidebar.vue'
 import ResultCard from '@/components/ResultCard.vue'
 import type { PredictionResult } from '@/types'
@@ -67,35 +71,54 @@ const filters = reactive({
   sortBy: 'date'
 })
 
+const results = ref<PredictionResult[]>([])
+const loading = ref(false)
+const loadError = ref('')
+
+const loadResults = async () => {
+  loading.value = true
+  loadError.value = ''
+  try {
+    const page = await resultApi.getResultList(1, 100)
+    results.value = page.list
+  } catch (error: unknown) {
+    loadError.value = error instanceof Error ? error.message : '加载预测结果失败'
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(loadResults)
+
 const filteredResults = computed(() => {
-  let results = [...mockResults]
+  let list = [...results.value]
   
   if (filters.confidence !== 'all') {
-    results = results.filter(r => r.confidenceLevel === filters.confidence)
+    list = list.filter(r => r.confidenceLevel === filters.confidence)
   }
   
   if (filters.search) {
     const search = filters.search.toLowerCase()
-    results = results.filter(r => 
-      r.targetName.toLowerCase().includes(search) ||
-      r.targetId.toLowerCase().includes(search) ||
-      r.id.toLowerCase().includes(search)
+    list = list.filter(r => 
+      (r.targetName || '').toLowerCase().includes(search) ||
+      (r.targetId || '').toLowerCase().includes(search) ||
+      String(r.id).toLowerCase().includes(search)
     )
   }
   
   switch (filters.sortBy) {
     case 'date':
-      results.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       break
     case 'affinity':
-      results.sort((a, b) => a.bindingAffinity - b.bindingAffinity)
+      list.sort((a, b) => (a.bindingAffinity ?? 0) - (b.bindingAffinity ?? 0))
       break
     case 'confidence':
-      results.sort((a, b) => b.confidenceScore - a.confidenceScore)
+      list.sort((a, b) => (b.confidenceScore ?? 0) - (a.confidenceScore ?? 0))
       break
   }
   
-  return results
+  return list
 })
 
 const handleResultDetail = (result: PredictionResult) => {

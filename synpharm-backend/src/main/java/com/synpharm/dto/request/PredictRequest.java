@@ -1,14 +1,24 @@
 package com.synpharm.dto.request;
 
+import com.fasterxml.jackson.databind.PropertyNamingStrategies;
+import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * 发送给 FastAPI 算法引擎的预测请求 DTO。
+ *
+ * <p>FastAPI 侧 Pydantic 模型使用 snake_case（algo_type/drug_smiles/...），
+ * 故通过 @JsonNaming(SnakeCaseStrategy) 将 camelCase 字段序列化为 snake_case，
+ * 与 FastAPI 契约对齐。
+ */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public class PredictRequest {
 
     private String algoType;

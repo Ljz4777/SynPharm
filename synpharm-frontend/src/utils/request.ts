@@ -2,7 +2,9 @@ import axios, { type AxiosInstance, type AxiosRequestConfig, type InternalAxiosR
 import { useAuthStore } from '@/stores/auth'
 import router from '@/router'
 
-const baseURL = import.meta.env.VITE_API_BASE_URL as string || 'http://localhost:8080'
+const envBase = (import.meta.env.VITE_API_BASE_URL as string || '').replace(/\/+$/, '')
+// 生产（Docker/nginx 同源反代）走相对路径；本地开发默认直连后端（跨域由 CORS 放开）
+const baseURL = envBase || (import.meta.env.PROD ? '' : 'http://localhost:8080')
 
 const service: AxiosInstance = axios.create({
   baseURL,
@@ -29,7 +31,8 @@ service.interceptors.response.use(
   (response: AxiosResponse) => {
     const res = response.data
     if (res.code !== 200) {
-      if (res.code === 401) {
+      // 401 或业务 Token 错误码（2001/2002/2003）都视为未登录/失效，登出并跳转登录页
+      if (res.code === 401 || res.code === 2001 || res.code === 2002 || res.code === 2003) {
         const authStore = useAuthStore()
         authStore.logout()
         router.push('/login')

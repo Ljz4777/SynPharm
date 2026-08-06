@@ -51,7 +51,8 @@ mybatis-plus:
       logic-not-delete-value: 0
 
 jwt:
-  secret: ${JWT_SECRET:SynPharmSecretKey2024ForJWTTokenGeneration}
+  # 安全关键：必须通过环境变量提供 ≥32 字节强随机密钥；留空则启动即失败（fail-fast）
+  secret: ${JWT_SECRET:}
   expiration: ${JWT_EXPIRATION:86400000}
 
 server:

@@ -16,9 +16,9 @@ public class DDIPredictRequest {
 
     /** 药物A的SMILES表达式 */
     @NotBlank(message = "药物A SMILES不能为空")
-    private String drugA;
+    private String drugASmiles;
 
     /** 药物B的SMILES表达式 */
     @NotBlank(message = "药物B SMILES不能为空")
-    private String drugB;
+    private String drugBSmiles;
 }

@@ -46,7 +46,7 @@ mybatis-plus:
       logic-not-delete-value: 0
 
 jwt:
-  secret: SynPharmSecretKey2024ForJWTTokenGeneration
+  secret: ${JWT_SECRET:}
   expiration: 86400000
 
 server:

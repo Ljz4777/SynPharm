@@ -33,8 +33,8 @@
         >
           <div class="tasks__card-header">
             <div class="tasks__card-info">
-              <span class="tasks__card-name">{{ task.name || task.id }}</span>
-              <span class="tasks__card-type">{{ task.type }}</span>
+              <span class="tasks__card-name">{{ task.taskNo || task.name || task.id }}</span>
+              <span class="tasks__card-type">{{ getTypeText(task.predictType || task.type || '') }}</span>
             </div>
             <span 
               class="tasks__status"
@@ -92,26 +92,43 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { mockTasks } from '@/data/mockResults'
+import { ref, computed, onMounted } from 'vue'
+import { taskApi } from '@/api/predict'
 import Sidebar from '@/components/Sidebar.vue'
 import type { Task } from '@/types'
 
 const activeTab = ref('all')
+const tasks = ref<Task[]>([])
+const loading = ref(false)
+const loadError = ref('')
+
+const loadTasks = async () => {
+  loading.value = true
+  loadError.value = ''
+  try {
+    tasks.value = await taskApi.getTaskList() as unknown as Task[]
+  } catch (error: unknown) {
+    loadError.value = error instanceof Error ? error.message : '加载任务失败'
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(loadTasks)
 
 const tabs = computed(() => [
-  { value: 'all', label: '全部', count: mockTasks.length },
-  { value: 'running', label: '运行中', count: mockTasks.filter((t: Task) => t.status === 'running').length },
-  { value: 'pending', label: '待处理', count: mockTasks.filter((t: Task) => t.status === 'pending').length },
-  { value: 'completed', label: '已完成', count: mockTasks.filter((t: Task) => t.status === 'completed').length },
-  { value: 'failed', label: '失败', count: mockTasks.filter((t: Task) => t.status === 'failed').length }
+  { value: 'all', label: '全部', count: tasks.value.length },
+  { value: 'running', label: '运行中', count: tasks.value.filter((t: Task) => t.status === 'running').length },
+  { value: 'pending', label: '待处理', count: tasks.value.filter((t: Task) => t.status === 'pending').length },
+  { value: 'completed', label: '已完成', count: tasks.value.filter((t: Task) => t.status === 'completed').length },
+  { value: 'failed', label: '失败', count: tasks.value.filter((t: Task) => t.status === 'failed').length }
 ])
 
 const filteredTasks = computed(() => {
   if (activeTab.value === 'all') {
-    return mockTasks
+    return tasks.value
   }
-  return mockTasks.filter((t: Task) => t.status === activeTab.value)
+  return tasks.value.filter((t: Task) => t.status === activeTab.value)
 })
 
 const getStatusText = (status: string): string => {
@@ -119,9 +136,19 @@ const getStatusText = (status: string): string => {
     completed: '已完成',
     running: '运行中',
     pending: '待处理',
-    failed: '失败'
+    failed: '失败',
+    cancelled: '已取消'
   }
   return texts[status] || status
+}
+
+const getTypeText = (type: string): string => {
+  const texts: Record<string, string> = {
+    dti: '药物-靶点',
+    ppi: '蛋白-蛋白',
+    ddi: '药物-药物'
+  }
+  return texts[type] || type
 }
 
 const getTabLabel = (tab: string): string => {

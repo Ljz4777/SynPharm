@@ -13,6 +13,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 /**
  * 预测控制器
  * 
@@ -89,5 +91,21 @@ public class PredictController {
         Long userId = jwtUtils.getUserIdFromToken(token.replace("Bearer ", ""));
         PredictResultResponse response = predictService.predictDDI(request, userId);
         return Result.success(response);
+    }
+
+    /**
+     * 预测历史查询接口
+     *
+     * <p>获取当前登录用户的预测历史列表（按创建时间倒序）。
+     *
+     * @param token 请求头中的JWT令牌（Bearer格式）
+     * @return 预测历史列表
+     */
+    @GetMapping("/history")
+    @Operation(summary = "获取预测历史", description = "获取当前登录用户的预测历史列表")
+    public Result<List<PredictResultResponse>> getHistory(
+            @RequestHeader("Authorization") String token) {
+        Long userId = jwtUtils.getUserIdFromToken(token.replace("Bearer ", ""));
+        return Result.success(predictService.getHistory(userId));
     }
 }

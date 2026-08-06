@@ -59,7 +59,7 @@ public class PredictUtils {
         List<PredictResultResponse> results = new ArrayList<>();
         
         PredictResultResponse result = PredictResultResponse.builder()
-                .resultId(random.nextLong())
+                .id(random.nextLong())
                 .targetId("P00533")
                 .targetName("EGFR")
                 .bindingAffinity(-random.nextDouble() * 10 - 5)
@@ -85,7 +85,7 @@ public class PredictUtils {
         List<PredictResultResponse> results = new ArrayList<>();
         
         PredictResultResponse result = PredictResultResponse.builder()
-                .resultId(random.nextLong())
+                .id(random.nextLong())
                 .targetId("P12345-P67890")
                 .targetName("ProteinA-ProteinB")
                 .bindingAffinity(-random.nextDouble() * 8 - 3)
@@ -111,7 +111,7 @@ public class PredictUtils {
         List<PredictResultResponse> results = new ArrayList<>();
         
         PredictResultResponse result = PredictResultResponse.builder()
-                .resultId(random.nextLong())
+                .id(random.nextLong())
                 .targetId("DrugA-DrugB")
                 .targetName("Drug Interaction")
                 .bindingAffinity(-random.nextDouble() * 5 - 2)

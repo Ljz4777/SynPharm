@@ -39,7 +39,8 @@ SpringBoot后端是 SynPharm AI预测核心模块的**业务中台**，负责处
 | WebClient | Spring WebFlux | HTTP客户端 |
 | Spring Security | 6.2.x | 安全框架 |
 | JWT | 0.12.x | Token认证 |
-| Redis | 7.0+ | 缓存（可选） |
+| Redis | 7.0+ | 缓存 / 批量进度缓存（可选） |
+| RabbitMQ | 3.13+ | 消息队列（批量任务异步调度，横向功能复用） |
 
 ### 1.4 双模运行机制
 
@@ -66,7 +67,8 @@ SpringBoot后端是 SynPharm AI预测核心模块的**业务中台**，负责处
 │  │              ↓                                                      │    │
 │  │  Service层                                                         │    │
 │  │  PredictServiceImpl → 调用管道工厂                                   │    │
-│  │  BatchProcessServiceImpl → Redis进度+异步批量处理                     │    │
+│  │  BatchProcessServiceImpl → 落库 + 发消息 + 进度追踪
+│  │  BatchTaskConsumer（MQ消费者）→ 监听队列 → 异步批量处理                     │    │
 │  │  UserServiceImpl → 用户认证逻辑                                     │    │
 │  │              ↓                                                      │    │
 │  │  Pipeline层（策略模式）                                             │    │
@@ -95,6 +97,8 @@ SpringBoot后端是 SynPharm AI预测核心模块的**业务中台**，负责处
 │  └──────────────────┘   └──────────────────┘   └──────────────────┘        │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
+
+> **说明**：批量任务异步调度依赖 **RabbitMQ**（生产者发送消息 → 消费者监听执行），架构图"外部依赖"中应包含 RabbitMQ，详见 **2.4 批量处理异步架构（消息队列 RabbitMQ）**。
 
 ### 2.2 文件结构
 
@@ -152,6 +156,10 @@ synpharm-backend/
 │   │   ├── WebClientConfig.java
 │   │   ├── AsyncConfig.java
 │   │   └── SecurityConfig.java
+│   ├── mq/                        # 消息队列（RabbitMQ）
+│   │   ├── RabbitConfig.java          # Exchange/Queue/绑定/死信配置
+│   │   ├── BatchTaskProducer.java     # 批量任务消息生产者
+│   │   └── BatchTaskConsumer.java     # 批量任务消息消费者（异步执行）
 │   ├── utils/                     # 工具类
 │   │   ├── CsvUtils.java
 │   │   └── JwtUtils.java
@@ -257,6 +265,8 @@ classDiagram
     PredictServiceImpl --> PredictRecordMapper : saves
     BatchProcessServiceImpl --> PipelineFactory : uses
     BatchProcessServiceImpl --> BatchTaskMapper : saves
+    BatchProcessServiceImpl --> BatchTaskProducer : sends message
+    BatchTaskConsumer --> PipelineFactory : uses
     BatchProcessServiceImpl --> CsvUtils : uses
     PipelineFactory <|.. DataPipelineFactory : implements
     DataPipelineFactory --> InputParser : uses
@@ -264,6 +274,56 @@ classDiagram
     DataPipelineFactory --> OutputFormatter : uses
     AlgoExecutor --> FastApiClient : calls
 ```
+
+### 2.4 批量处理异步架构（消息队列 RabbitMQ）
+
+> **设计决策**：批量任务由「线程池异步」升级为「消息队列（RabbitMQ）驱动」，为后续横向功能（通知、报表、外部集成等）提供统一的消息基础设施。
+
+**核心链路**：
+
+```
+前端上传 CSV
+   │
+   ▼
+POST /api/batch/upload
+   │  ① 保存文件到 uploadDir
+   │  ② 写入 batch_task（状态 PENDING，含 algo_type/deleted）
+   │  ③ 发送消息到 RabbitMQ（batch.task.queue，携带 batchId + algoType）
+   ▼
+BatchTaskConsumer（@RabbitListener 监听 batch.task.queue）
+   │  ① 读取 batchId/algoType
+   │  ② 执行批量预测（分片调用 PipelineFactory）
+   │  ③ 写结果 CSV + 更新 batch_task 状态（PROCESSING→SUCCESS/FAIL）
+   │  ④ 更新 Redis 进度缓存
+   ▼
+GET /api/batch/status/{batchId} → 查进度（DB 为准，Redis 加速）
+GET /api/batch/download/{batchId} → 下载结果文件
+```
+
+**消息与队列设计**：
+
+| 组件 | 名称 | 说明 |
+| :--- | :--- | :--- |
+| Exchange | `synpharm.exchange`（direct） | 统一交换机，横向功能复用 |
+| 业务队列 | `batch.task.queue` | 批量任务队列 |
+| 死信队列 | `batch.task.dlq` | 处理失败/超时消息 |
+| RoutingKey | `batch.task` | 批量任务路由键 |
+
+**可靠性保障**：
+- 消息**持久化** + 队列持久化 → 服务重启不丢消息
+- 消费者手动 ack：处理成功才确认，失败进死信队列（`x-dead-letter-exchange`）
+- **有限次重试**：失败消息入 DLQ 后由补偿任务或人工处理
+- 任务状态以 **DB（batch_task）为权威**，Redis 仅作进度缓存 → 重启可从 DB 恢复
+
+**与线程池方案对比**：
+
+| 维度 | 线程池（旧） | RabbitMQ（新） |
+| :--- | :--- | :--- |
+| 任务持久化 | ❌ 内存，重启丢失 | ✅ 消息落盘 |
+| 重试/死信 | ❌ 需自研 | ✅ 内建 |
+| 水平扩展 | ❌ 多实例不共享 | ✅ 消费者集群 |
+| 解耦 | ❌ | ✅ 生产/消费分离 |
+| 运维成本 | 低 | 中（多一个中间件） |
 
 ---
 
@@ -316,6 +376,9 @@ classDiagram
 | `error_msg` | TEXT | | 错误信息 |
 | `create_time` | DATETIME | DEFAULT CURRENT_TIMESTAMP | 创建时间 |
 | `update_time` | DATETIME | ON UPDATE CURRENT_TIMESTAMP | 更新时间 |
+| `deleted` | TINYINT | DEFAULT 0 | 逻辑删除（0未删除，1已删除） |
+
+> 说明：`algo_type`、`deleted` 列需与 `06_batch_task.sql` 建表脚本及 `BatchTask.java` 实体对齐（实施时同步补迁移 SQL）。
 
 ### 3.2 实体类定义
 
@@ -401,7 +464,7 @@ public class BatchTask {
 | 单条预测 | POST | `/api/predict/ddi` | DDI预测 | ✅ |
 | 单条预测 | GET | `/api/predict/history` | 获取预测历史 | ✅ |
 | 批量预测 | POST | `/api/batch/upload` | 批量上传 | ✅ |
-| 批量预测 | GET | `/api/batch/progress/{batchId}` | 查询进度 | ✅ |
+| 批量预测 | GET | `/api/batch/status/{batchId}` | 查询进度 | ✅ |
 | 批量预测 | GET | `/api/batch/download/{batchId}` | 下载结果 | ✅ |
 
 ### 4.2 用户登录接口

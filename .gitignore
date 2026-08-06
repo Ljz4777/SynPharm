@@ -40,7 +40,9 @@ desktop.ini
 # ============== 日志 ==============
 *.log
 logs/
-log/
+# log/ 目录除 CHANGELOG.md 外全部忽略（日志文件不入库，CHANGELOG 入库）
+log/*
+!log/CHANGELOG.md
 
 # ============== 数据库 ==============
 *.db

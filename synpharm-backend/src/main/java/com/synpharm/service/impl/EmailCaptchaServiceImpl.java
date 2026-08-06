@@ -56,6 +56,10 @@ public class EmailCaptchaServiceImpl implements CaptchaService {
     @Value("${QQ_EMAIL:}")
     private String senderEmail;
 
+    /** 显式开发模式开关：true 时验证码直接回显给前端（仅限本地/测试，生产必须保持 false） */
+    @Value("${CAPTCHA_DEV_MODE:false}")
+    private boolean captchaDevMode;
+
     /** Redis Key前缀：验证码 */
     private static final String CAPTCHA_KEY = "captcha:email:";
 
@@ -99,11 +103,16 @@ public class EmailCaptchaServiceImpl implements CaptchaService {
         String key = CAPTCHA_KEY + type + ":" + target;
         redisTemplate.opsForValue().set(key, code, CAPTCHA_EXPIRE_MINUTES, TimeUnit.MINUTES);
 
-        // ========== 第四步：发送邮件（未配置发件邮箱则进入开发模式回显） ==========
-        if (!StringUtils.hasText(senderEmail)) {
-            // 开发模式：不发邮件，验证码直接返回给前端 + 打印日志，方便本地/无服务器环境联调
-            log.warn("[开发模式] 未配置发件邮箱 QQ_EMAIL，验证码不会发送到邮箱。target={}, code={}", target, code);
+        // ========== 第四步：发送邮件 ==========
+        // 显式开发模式（CAPTCHA_DEV_MODE=true）才回显验证码；生产不允许回显
+        if (captchaDevMode) {
+            log.warn("[开发模式] CAPTCHA_DEV_MODE=true，验证码不回发邮件。target={}, code={}", target, code);
             return SendCaptchaResult.builder().devMode(true).code(code).build();
+        }
+
+        if (!StringUtils.hasText(senderEmail)) {
+            log.error("未配置发件邮箱 QQ_EMAIL，无法发送验证码。target={}", target);
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "邮件服务未配置，无法发送验证码");
         }
 
         Map<String, String> params = new HashMap<>();

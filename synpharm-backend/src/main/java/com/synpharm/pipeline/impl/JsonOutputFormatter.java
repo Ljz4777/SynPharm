@@ -52,21 +52,28 @@ public class JsonOutputFormatter implements OutputFormatter {
         if (metrics.getInteractions() != null) {
             for (var interaction : metrics.getInteractions()) {
                 interactions.add(PredictResultResponse.InteractionInfo.builder()
-                        .residue(interaction.getResidue())
                         .type(interaction.getType())
+                        .residueName(interaction.getResidue())
                         .distance(interaction.getDistance())
                         .build());
             }
         }
-        
+
+        String algoType = response.getAlgoType();
         return PredictResultResponse.builder()
-                .algoType(response.getAlgoType())
+                .algoType(algoType)
                 .targetId(metrics.getTargetId())
                 .targetName(metrics.getTargetName())
                 .bindingAffinity(metrics.getBindingAffinity())
                 .confidenceScore(metrics.getConfidenceScore())
                 .confidenceLevel(metrics.getConfidenceLevel())
                 .interactions(interactions)
+                .datasetInfo(PredictResultResponse.DatasetInfo.builder()
+                        .name(algoType == null ? "AI预测" : algoType + "预测结果")
+                        .size(metrics.getInteractions() == null ? 0 : metrics.getInteractions().size())
+                        .description("由 FastAPI 算法引擎计算")
+                        .source("fastapi")
+                        .build())
                 .build();
     }
 }

@@ -82,6 +82,8 @@ services:
       # JWT
       JWT_SECRET: ${JWT_SECRET:?请在 .env 中设置 JWT_SECRET}
       JWT_EXPIRATION: ${JWT_EXPIRATION:-86400000}
+      # 验证码开发模式（true 时验证码回显，仅限本地测试；生产必须 false）
+      CAPTCHA_DEV_MODE: ${CAPTCHA_DEV_MODE:-false}
       # FastAPI 算法引擎
       FASTAPI_URL: http://fastapi:8000
       # 后端调用算法引擎使用的单一 API Key（与 FastAPI 的 API_KEYS 对应）

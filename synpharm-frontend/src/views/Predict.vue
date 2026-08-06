@@ -183,6 +183,7 @@
               {{ isLoading ? '预测中...' : '开始预测' }}
             </button>
           </div>
+          <div v-if="predictError" class="predict__error">{{ predictError }}</div>
         </div>
       </section>
       
@@ -326,7 +327,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { mockResults } from '@/data/mockResults'
+import { predictApi } from '@/api/predict'
 import Sidebar from '@/components/Sidebar.vue'
 import type { PredictionResult } from '@/types'
 
@@ -344,6 +345,7 @@ const detailedOutput = ref(true)
 const showAdvancedOptions = ref(false)
 const isLoading = ref(false)
 const predictionResult = ref<PredictionResult | null>(null)
+const predictError = ref('')
 
 const predictionTypes: Array<{ value: 'ppi' | 'dti' | 'ddi', label: string, icon: string, description: string }> = [
   { value: 'ppi', label: 'PPI预测', icon: '🔬', description: '蛋白质-蛋白质相互作用' },
@@ -558,51 +560,54 @@ const formatNumber = (num: number): string => {
 }
 
 const handleDemoPredict = async () => {
-  firstInputValue.value = 'C(=O)(C(=O)O)NC(CCC(=O)O)C(=O)O'
-  secondInputValue.value = 'P0DTC2'
+  // 根据当前预测类型填充演示输入
+  if (selectedType.value === 'dti') {
+    firstInputValue.value = 'C(=O)(C(=O)O)NC(CCC(=O)O)C(=O)O'
+    secondInputValue.value = 'P0DTC2'
+  } else if (selectedType.value === 'ppi') {
+    firstInputValue.value = 'MGLGLGQ'
+    secondInputValue.value = 'MVHLTEK'
+  } else {
+    firstInputValue.value = 'CC(=O)OC1=CC=CC=C1C(=O)O'
+    secondInputValue.value = 'C1CCCCC1'
+  }
   firstInputError.value = ''
   secondInputError.value = ''
   
-  isLoading.value = true
-  
-  await new Promise(resolve => setTimeout(resolve, 1500))
-  
-  predictionResult.value = {
-    id: 'demo_result',
-    targetId: 'P0DTC2',
-    targetName: 'ACE2',
-    ligandSmiles: 'C(=O)(C(=O)O)NC(CCC(=O)O)C(=O)O',
-    bindingAffinity: -8.5 + Math.random() * (-2),
-    confidenceScore: 0.85 + Math.random() * 0.1,
-    confidenceLevel: 'high',
-    interactions: [
-      { type: 'hydrogen_bond', residueName: 'ASP', residueNumber: 30, distance: 2.8 },
-      { type: 'hydrogen_bond', residueName: 'GLN', residueNumber: 24, distance: 3.1 },
-      { type: 'hydrophobic', residueName: 'PHE', residueNumber: 45, distance: 4.2 },
-      { type: 'ionic', residueName: 'LYS', residueNumber: 19, distance: 3.5 }
-    ],
-    createdAt: new Date().toISOString(),
-    datasetInfo: {
-      name: '演示数据集',
-      size: 10000,
-      description: '内部演示数据',
-      source: 'internal'
-    }
-  }
-  
-  isLoading.value = false
+  await handlePredict()
 }
 
 const handlePredict = async () => {
   if (!isValidInput.value) return
   
   isLoading.value = true
+  predictError.value = ''
+  predictionResult.value = null
   
-  await new Promise(resolve => setTimeout(resolve, 2000))
-  
-  predictionResult.value = mockResults[0]
-  
-  isLoading.value = false
+  try {
+    let response
+    if (selectedType.value === 'dti') {
+      response = await predictApi.predictDTI({
+        smiles: firstInputValue.value.trim(),
+        targetId: secondInputValue.value.trim()
+      })
+    } else if (selectedType.value === 'ppi') {
+      response = await predictApi.predictPPI({
+        proteinA: firstInputValue.value.trim(),
+        proteinB: secondInputValue.value.trim()
+      })
+    } else {
+      response = await predictApi.predictDDI({
+        drugASmiles: firstInputValue.value.trim(),
+        drugBSmiles: secondInputValue.value.trim()
+      })
+    }
+    predictionResult.value = response as unknown as PredictionResult
+  } catch (error: unknown) {
+    predictError.value = error instanceof Error ? error.message : '预测失败，请稍后重试'
+  } finally {
+    isLoading.value = false
+  }
 }
 </script>
 
@@ -1071,6 +1076,16 @@ const handlePredict = async () => {
 .predict__actions {
   display: flex;
   gap: $spacing-md;
+}
+
+.predict__error {
+  margin-top: $spacing-md;
+  padding: $spacing-sm $spacing-md;
+  border-radius: $border-radius-md;
+  background: rgba(239, 68, 68, 0.1);
+  color: $error-color;
+  font-size: $font-size-sm;
+  text-align: center;
 }
 
 .predict__btn {

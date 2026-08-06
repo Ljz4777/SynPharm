@@ -16,18 +16,35 @@ export interface DDIPredictRequest {
   drugBSmiles: string
 }
 
+/** 预测结果响应（与后端 PredictResultResponse 对齐） */
 export interface PredictResultResponse {
-  id: string
-  targetId: string
-  targetName: string
-  bindingAffinity: number
-  confidenceScore: number
-  confidenceLevel: string
-  interactions: Array<{
-    residue: string
-    type: string
-    distance: number
+  id?: string | number
+  algoType?: string
+  targetId?: string
+  targetName?: string
+  ligandSmiles?: string
+  bindingAffinity?: number
+  confidenceScore?: number
+  confidenceLevel?: string
+  interactions?: Array<{
+    type?: string
+    residueName?: string
+    residueNumber?: string
+    distance?: number
   }>
+  createdAt?: string
+  datasetInfo?: {
+    name?: string
+    size?: number
+    description?: string
+    source?: string
+  }
+}
+
+/** 分页结果结构（后端 /api/results 返回 { total, list }） */
+export interface PagedResult<T> {
+  total: number
+  list: T[]
 }
 
 export const predictApi = {
@@ -49,17 +66,25 @@ export const taskApi = {
     return request.get<Task[]>('/api/tasks')
   },
 
-  getTaskDetail(taskNo: string): Promise<Task> {
-    return request.get<Task>(`/api/tasks/${taskNo}`)
+  getTaskDetail(id: string | number): Promise<Task> {
+    return request.get<Task>(`/api/tasks/${id}`)
+  },
+
+  cancelTask(id: string | number): Promise<void> {
+    return request.delete<void>(`/api/tasks/${id}`)
   }
 }
 
 export const resultApi = {
-  getResultList(): Promise<PredictionResult[]> {
-    return request.get<PredictionResult[]>('/api/results')
+  getResultList(page = 1, pageSize = 10): Promise<PagedResult<PredictionResult>> {
+    return request.get<PagedResult<PredictionResult>>('/api/results', { params: { page, pageSize } })
   },
 
-  getResultDetail(resultNo: string): Promise<PredictionResult> {
-    return request.get<PredictionResult>(`/api/results/${resultNo}`)
+  getResultDetail(id: string | number): Promise<PredictionResult> {
+    return request.get<PredictionResult>(`/api/results/${id}`)
+  },
+
+  deleteResult(id: string | number): Promise<void> {
+    return request.delete<void>(`/api/results/${id}`)
   }
 }

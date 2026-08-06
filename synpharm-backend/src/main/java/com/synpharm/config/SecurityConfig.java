@@ -12,6 +12,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfigurationSource;
+import jakarta.servlet.http.HttpServletResponse;
 
 /**
  * Spring Security 安全配置
@@ -84,6 +85,13 @@ public class SecurityConfig {
                 // ---- 其他所有请求都需要认证（包括登出接口） ----
                 .anyRequest().authenticated()
             )
+
+            // ========== 4.5 认证入口点：未登录/Token失效统一返回 401 ==========
+            .exceptionHandling(ex -> ex.authenticationEntryPoint((request, response, authException) -> {
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                response.setContentType("application/json;charset=UTF-8");
+                response.getWriter().write("{\"code\":401,\"message\":\"未登录或登录已失效\"}");
+            }))
 
             // ========== 5. 添加JWT认证过滤器 ==========
             // 在UsernamePasswordAuthenticationFilter之前执行

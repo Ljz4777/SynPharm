@@ -4,8 +4,6 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.synpharm.model.entity.PredictResult;
 import org.apache.ibatis.annotations.Mapper;
 
-import java.util.List;
-
 /**
  * 预测结果数据访问接口
  * 
@@ -16,12 +14,4 @@ import java.util.List;
  */
 @Mapper
 public interface PredictResultMapper extends BaseMapper<PredictResult> {
-    
-    /**
-     * 根据任务ID查询结果列表
-     * 
-     * @param taskId 任务ID
-     * @return 结果列表
-     */
-    List<PredictResult> selectByTaskId(Long taskId);
 }
