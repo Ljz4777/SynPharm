@@ -1,322 +1,266 @@
 <template>
-  <div class="predict">
+  <div class="pc">
     <Sidebar />
-    <main class="predict__content">
-      <header class="predict__header">
-        <div class="predict__header-left">
-          <h1 class="predict__title">AI 预测中心</h1>
-          <p class="predict__subtitle">药物相互作用智能预测平台</p>
+    <main class="pc__main">
+      <!-- 页头 -->
+      <header class="pc__header">
+        <div>
+          <h1 class="pc__title">预测中心</h1>
+          <p class="pc__subtitle">药物 · 蛋白质 · 分子间相互作用智能预测</p>
         </div>
-        <div class="predict__header-stats">
-          <div class="predict__stat-item">
-            <span class="predict__stat-value">2,500+</span>
-            <span class="predict__stat-label">预测任务</span>
-          </div>
-          <div class="predict__stat-item">
-            <span class="predict__stat-value">98%</span>
-            <span class="predict__stat-label">准确率</span>
-          </div>
+        <div class="pc__stats">
+          <span class="pc__stat"><b>2,500+</b><em>预测任务</em></span>
+          <span class="pc__stat"><b>98%</b><em>准确率</em></span>
         </div>
       </header>
-      
-      <section class="predict__type-selector">
-        <div 
-          v-for="type in predictionTypes" 
-          :key="type.value"
-          @click="selectedType = type.value"
-          class="predict__type-card"
-          :class="{ 'predict__type-card--active': selectedType === type.value }"
-        >
-          <div class="predict__type-icon-wrapper">
-            <span class="predict__type-icon">{{ type.icon }}</span>
-          </div>
-          <div class="predict__type-info">
-            <span class="predict__type-name">{{ type.label }}</span>
-            <span class="predict__type-desc">{{ type.description }}</span>
-          </div>
-          <div class="predict__type-arrow">
-            <svg v-if="selectedType === type.value" class="predict__check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="20 6 9 17 4 12"></polyline>
-            </svg>
-          </div>
-        </div>
-      </section>
-      
-      <section class="predict__form">
-        <div class="predict__form-card">
-          <div class="predict__form-header">
-            <div class="predict__form-header-left">
-              <h2 class="predict__form-title">输入数据</h2>
-              <span class="predict__form-subtitle">{{ getFormSubtitle() }}</span>
-            </div>
-            <button 
-              @click="handleDemoPredict" 
-              class="predict__demo-btn"
+
+      <!-- 模式切换 -->
+      <div class="pc__tabs">
+        <button class="pc__tab" :class="{ 'pc__tab--active': mode === 'single' }" @click="mode = 'single'">单条预测</button>
+        <button class="pc__tab" :class="{ 'pc__tab--active': mode === 'batch' }" @click="mode = 'batch'">批量预测</button>
+      </div>
+
+      <!-- ===== 单条预测 ===== -->
+      <section v-show="mode === 'single'" class="pc__panel">
+        <div class="pc__card">
+          <div class="pc__types">
+            <button
+              v-for="type in predictionTypes"
+              :key="type.value"
+              class="pc__type"
+              :class="{ 'pc__type--active': selectedType === type.value }"
+              @click="selectedType = type.value"
             >
-              <svg class="predict__demo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="10"></circle>
-                <path d="M15 9l-6 6"></path>
-                <path d="M9 9l6 6"></path>
-              </svg>
-              使用演示数据
+              <span class="pc__type-icon">{{ type.icon }}</span>
+              <span class="pc__type-name">{{ type.label }}</span>
             </button>
           </div>
-          
-          <div class="predict__input-wrapper">
-            <div class="predict__input-column">
-              <div class="predict__input-group">
-                <div class="predict__input-group-header">
-                  <label class="predict__label">{{ getFirstInputLabel() }}</label>
-                  <button 
-                    @click="clearFirstInput" 
-                    v-if="firstInputValue"
-                    class="predict__input-clear"
-                  >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <line x1="18" y1="6" x2="6" y2="18"></line>
-                      <line x1="6" y1="6" x2="18" y2="18"></line>
-                    </svg>
-                  </button>
-                </div>
-                <input 
-                  v-model="firstInputValue"
-                  type="text"
-                  class="predict__input"
-                  :class="{ 'predict__input--error': firstInputError }"
-                  :placeholder="getFirstInputPlaceholder()"
-                  @input="validateFirstInput"
-                />
-                <span v-if="firstInputError" class="predict__input-error">{{ firstInputError }}</span>
-                <span v-if="!firstInputError && firstInputValue" class="predict__input-valid">✓ 格式有效</span>
+
+          <p class="pc__form-subtitle">{{ getFormSubtitle() }}</p>
+
+          <div class="pc__form">
+            <div class="pc__input-block">
+              <div class="pc__input-head">
+                <label class="pc__label">{{ getFirstInputLabel() }}</label>
+                <button v-if="firstInputValue" class="pc__clear" @click="clearFirstInput" title="清空">✕</button>
               </div>
-              
-              <div class="predict__input-divider">
-                <span class="predict__divider-text">VS</span>
+              <input
+                v-model="firstInputValue"
+                type="text"
+                class="pc__input"
+                :class="{ 'pc__input--error': firstInputError }"
+                :placeholder="getFirstInputPlaceholder()"
+                @input="validateFirstInput"
+              />
+              <div class="pc__hint">
+                <span v-if="firstInputError" class="pc__err">{{ firstInputError }}</span>
+                <span v-else-if="firstInputValue" class="pc__ok">✓ 格式有效</span>
               </div>
-              
-              <div class="predict__input-group">
-                <div class="predict__input-group-header">
-                  <label class="predict__label">{{ getSecondInputLabel() }}</label>
-                  <button 
-                    @click="clearSecondInput" 
-                    v-if="secondInputValue"
-                    class="predict__input-clear"
-                  >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <line x1="18" y1="6" x2="6" y2="18"></line>
-                      <line x1="6" y1="6" x2="18" y2="18"></line>
-                    </svg>
-                  </button>
-                </div>
-                <input 
-                  v-model="secondInputValue"
-                  type="text"
-                  class="predict__input"
-                  :class="{ 'predict__input--error': secondInputError }"
-                  :placeholder="getSecondInputPlaceholder()"
-                  @input="validateSecondInput"
-                />
-                <span v-if="secondInputError" class="predict__input-error">{{ secondInputError }}</span>
-                <span v-if="!secondInputError && secondInputValue" class="predict__input-valid">✓ 格式有效</span>
+            </div>
+
+            <div class="pc__vs"><span>VS</span></div>
+
+            <div class="pc__input-block">
+              <div class="pc__input-head">
+                <label class="pc__label">{{ getSecondInputLabel() }}</label>
+                <button v-if="secondInputValue" class="pc__clear" @click="clearSecondInput" title="清空">✕</button>
+              </div>
+              <input
+                v-model="secondInputValue"
+                type="text"
+                class="pc__input"
+                :class="{ 'pc__input--error': secondInputError }"
+                :placeholder="getSecondInputPlaceholder()"
+                @input="validateSecondInput"
+              />
+              <div class="pc__hint">
+                <span v-if="secondInputError" class="pc__err">{{ secondInputError }}</span>
+                <span v-else-if="secondInputValue" class="pc__ok">✓ 格式有效</span>
               </div>
             </div>
           </div>
-          
-          <div class="predict__options">
-            <button 
-              @click="showAdvancedOptions = !showAdvancedOptions"
-              class="predict__options-toggle"
-            >
-              <svg class="predict__toggle-icon" :class="{ 'predict__toggle-icon--rotated': showAdvancedOptions }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="6 9 12 15 18 9"></polyline>
-              </svg>
+
+          <div class="pc__advanced">
+            <button class="pc__advanced-toggle" @click="showAdvancedOptions = !showAdvancedOptions">
+              <span class="pc__chevron" :class="{ 'pc__chevron--open': showAdvancedOptions }">▾</span>
               {{ showAdvancedOptions ? '收起' : '展开' }}高级选项
             </button>
-            
-            <div v-if="showAdvancedOptions" class="predict__advanced-options">
-              <div class="predict__advanced-row">
-                <div class="predict__advanced-option">
-                  <div class="predict__advanced-option-header">
-                    <label class="predict__label">置信度阈值</label>
-                    <span class="predict__range-value">{{ confidenceThreshold }}%</span>
-                  </div>
-                  <input 
-                    v-model="confidenceThreshold"
-                    type="range"
-                    min="0"
-                    max="100"
-                    class="predict__range-input"
-                  />
-                  <div class="predict__range-labels">
-                    <span>0%</span>
-                    <span>50%</span>
-                    <span>100%</span>
-                  </div>
+            <div v-if="showAdvancedOptions" class="pc__advanced-body">
+              <div class="pc__advanced-item">
+                <div class="pc__advanced-head">
+                  <label class="pc__label">置信度阈值</label>
+                  <span class="pc__range-val">{{ confidenceThreshold }}%</span>
                 </div>
-                <div class="predict__advanced-option">
-                  <div class="predict__advanced-option-header">
-                    <label class="predict__label">输出详细结果</label>
-                    <label class="predict__checkbox-wrapper">
-                      <input 
-                        v-model="detailedOutput"
-                        type="checkbox"
-                        class="predict__checkbox"
-                      />
-                      <span class="predict__checkbox-custom"></span>
-                    </label>
-                  </div>
-                  <span class="predict__advanced-option-desc">包含完整的相互作用分析和可视化数据</span>
-                </div>
+                <input v-model="confidenceThreshold" type="range" min="0" max="100" class="pc__range" />
               </div>
+              <label class="pc__advanced-item pc__advanced-item--row">
+                <span class="pc__label">输出详细结果</span>
+                <span class="pc__checkbox">
+                  <input v-model="detailedOutput" type="checkbox" />
+                  <span class="pc__checkbox-box"></span>
+                </span>
+                <span class="pc__desc">包含完整相互作用与可视化数据</span>
+              </label>
             </div>
           </div>
-          
-          <div class="predict__actions">
-            <button 
-              @click="handlePredict" 
-              class="predict__btn predict__btn--primary"
-              :disabled="!isValidInput || isLoading"
-            >
-              <svg v-if="isLoading" class="predict__btn-icon predict__btn-icon--loading" viewBox="0 0 24 24">
-                <circle class="predict__loading-spinner" cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-              </svg>
+
+          <div class="pc__actions">
+            <button class="pc__btn pc__btn--ghost" @click="handleDemoPredict">
+              <svg class="pc__btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M15 9l-6 6"></path><path d="M9 9l6 6"></path></svg>
+              使用演示数据
+            </button>
+            <button class="pc__btn pc__btn--primary" :disabled="!isValidInput || isLoading" @click="handlePredict">
+              <span v-if="isLoading" class="pc__spin"></span>
               {{ isLoading ? '预测中...' : '开始预测' }}
             </button>
           </div>
-          <div v-if="predictError" class="predict__error">{{ predictError }}</div>
+          <div v-if="predictError" class="pc__error">{{ predictError }}</div>
         </div>
       </section>
-      
-      <section v-if="predictionResult" class="predict__result">
-        <div class="predict__result-card">
-          <div class="predict__result-header">
-            <h3 class="predict__result-title">预测结果</h3>
-            <div class="predict__result-header-right">
-              <span class="predict__result-badge">
-                {{ predictionResult.datasetInfo.name }}
-              </span>
-              <span class="predict__result-time">{{ formatTime(predictionResult.createdAt) }}</span>
+
+      <!-- ===== 批量预测 ===== -->
+      <section v-show="mode === 'batch'" class="pc__panel">
+        <div class="pc__card">
+          <div class="pc__card-head">
+            <h3 class="pc__card-title">CSV 批量预测</h3>
+            <p class="pc__card-sub">上传 CSV 文件，系统异步处理，支持 DTI / PPI / DDI</p>
+          </div>
+
+          <div class="pc__batch-body">
+            <select v-model="batchAlgoType" class="pc__select">
+              <option value="DTI">DTI 预测</option>
+              <option value="PPI">PPI 预测</option>
+              <option value="DDI">DDI 预测</option>
+            </select>
+
+            <label class="pc__dropzone" :class="{ 'pc__dropzone--has': batchFile }">
+              <input type="file" accept=".csv" class="pc__file" @change="handleBatchFileChange" />
+              <template v-if="!batchFile">
+                <span class="pc__dropzone-icon">📄</span>
+                <span class="pc__dropzone-text">点击选择 CSV 文件</span>
+                <span class="pc__dropzone-sub">每行一个输入（SMILES / 序列）</span>
+              </template>
+              <template v-else>
+                <span class="pc__dropzone-icon">✅</span>
+                <span class="pc__dropzone-text">{{ batchFile.name }}</span>
+                <span class="pc__dropzone-sub">点击可重新选择</span>
+              </template>
+            </label>
+
+            <button
+              class="pc__btn pc__btn--primary pc__btn--block"
+              :disabled="!batchFile || batchUploading"
+              @click="handleBatchUpload"
+            >
+              <span v-if="batchUploading" class="pc__spin"></span>
+              {{ batchUploading ? '上传中...' : '开始批量预测' }}
+            </button>
+          </div>
+
+          <div v-if="batchError" class="pc__error">{{ batchError }}</div>
+
+          <div v-if="batchStatus" class="pc__batch-status">
+            <div class="pc__batch-status-row">
+              <span class="pc__batch-id">批次 {{ batchStatus.batchId?.substring(0, 8) }}</span>
+              <span
+                class="pc__batch-state"
+                :class="'pc__batch-state--' + batchStatus.status.toLowerCase()"
+              >{{ batchStatus.status }}</span>
+              <span class="pc__batch-pct">{{ batchStatus.progress }}%</span>
+            </div>
+            <div class="pc__progress">
+              <div class="pc__progress-fill" :style="{ width: (batchStatus.progress || 0) + '%' }"></div>
+            </div>
+            <button
+              v-if="batchStatus.status === 'SUCCESS'"
+              class="pc__btn pc__btn--secondary pc__btn--block"
+              @click="handleBatchDownload"
+            >
+              ⬇ 下载结果
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== 预测结果 ===== -->
+      <section v-if="predictionResult" class="pc__panel">
+        <div class="pc__card">
+          <div class="pc__result-head">
+            <div>
+              <h3 class="pc__card-title">预测结果</h3>
+              <span class="pc__result-time">{{ formatTime(predictionResult.createdAt) }}</span>
+            </div>
+            <span class="pc__badge">{{ predictionResult.datasetInfo.name }}</span>
+          </div>
+
+          <div class="pc__result-grid">
+            <div class="pc__score">
+              <div class="pc__score-ring">
+                <svg class="pc__score-svg" viewBox="0 0 120 120">
+                  <circle cx="60" cy="60" r="50" fill="none" stroke="#e8edf3" stroke-width="10" />
+                  <circle
+                    cx="60" cy="60" r="50" fill="none"
+                    :stroke="getConfidenceColor(predictionResult.confidenceScore)"
+                    stroke-width="10" stroke-linecap="round"
+                    :stroke-dasharray="`${predictionResult.confidenceScore * 314} 314`"
+                    transform="rotate(-90 60 60)"
+                  />
+                </svg>
+                <div class="pc__score-num">{{ Math.round(predictionResult.confidenceScore * 100) }}%</div>
+              </div>
+              <span class="pc__score-label">结合概率</span>
+              <span
+                class="pc__score-level"
+                :style="{ color: getConfidenceColor(predictionResult.confidenceScore) }"
+              >{{ getConfidenceText(predictionResult.confidenceLevel) }}置信度</span>
+            </div>
+
+            <div class="pc__details">
+              <div class="pc__detail">
+                <span class="pc__detail-label">靶点名称</span>
+                <span class="pc__detail-val">{{ predictionResult.targetName }}</span>
+              </div>
+              <div class="pc__detail">
+                <span class="pc__detail-label">靶点 ID</span>
+                <span class="pc__detail-val">{{ predictionResult.targetId }}</span>
+              </div>
+              <div class="pc__detail pc__detail--accent">
+                <span class="pc__detail-label">结合亲和力</span>
+                <span class="pc__detail-val">{{ predictionResult.bindingAffinity.toFixed(2) }} <small>kcal/mol</small></span>
+              </div>
             </div>
           </div>
-          
-          <div class="predict__result-summary">
-            <div class="predict__result-main">
-              <div class="predict__result-score-card">
-                <div class="predict__score-label">结合概率</div>
-                <div class="predict__score-ring">
-                  <svg class="predict__score-ring-svg" viewBox="0 0 120 120">
-                    <circle class="predict__score-ring-bg" cx="60" cy="60" r="50" fill="none" stroke="#e2e8f0" stroke-width="8" />
-                    <circle 
-                      class="predict__score-ring-progress" 
-                      cx="60" cy="60" r="50" fill="none" 
-                      :stroke="getConfidenceColor(predictionResult.confidenceScore)" 
-                      stroke-width="8" 
-                      stroke-linecap="round"
-                      :stroke-dasharray="`${predictionResult.confidenceScore * 314} 314`"
-                      transform="rotate(-90 60 60)"
-                    />
-                  </svg>
-                  <div class="predict__score-value">
-                    {{ Math.round(predictionResult.confidenceScore * 100) }}%
-                  </div>
-                </div>
-                <div class="predict__score-badge" :style="{ background: getConfidenceBgColor(predictionResult.confidenceLevel), color: getConfidenceColor(predictionResult.confidenceScore) }">
-                  {{ getConfidenceText(predictionResult.confidenceLevel) }}置信度
-                </div>
-              </div>
-              
-              <div class="predict__result-details">
-                <div class="predict__result-detail-item">
-                  <svg class="predict__detail-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                    <circle cx="12" cy="7" r="4"></circle>
-                  </svg>
-                  <div class="predict__detail-content">
-                    <span class="predict__detail-label">靶点名称</span>
-                    <span class="predict__detail-value">{{ predictionResult.targetName }}</span>
-                  </div>
-                </div>
-                <div class="predict__result-detail-item">
-                  <svg class="predict__detail-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M12 20V10"></path>
-                    <path d="M18 20V4"></path>
-                    <path d="M6 20v-6"></path>
-                  </svg>
-                  <div class="predict__detail-content">
-                    <span class="predict__detail-label">靶点ID</span>
-                    <span class="predict__detail-value">{{ predictionResult.targetId }}</span>
-                  </div>
-                </div>
-                <div class="predict__result-detail-item predict__result-detail-item--highlight">
-                  <svg class="predict__detail-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <line x1="12" y1="2" x2="12" y2="22"></line>
-                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-                  </svg>
-                  <div class="predict__detail-content">
-                    <span class="predict__detail-label">结合亲和力</span>
-                    <span class="predict__detail-value predict__detail-value--highlight">
-                      {{ predictionResult.bindingAffinity.toFixed(2) }} <span class="predict__detail-unit">kcal/mol</span>
-                    </span>
-                  </div>
-                </div>
+
+          <div class="pc__section">
+            <h4 class="pc__section-title">相互作用分析</h4>
+            <div class="pc__interactions">
+              <div v-for="(it, i) in predictionResult.interactions" :key="i" class="pc__interaction">
+                <span
+                  class="pc__interaction-tag"
+                  :style="{ background: getInteractionBgColor(it.type), color: getInteractionColor(it.type) }"
+                >{{ getInteractionIcon(it.type) }} {{ getInteractionTypeName(it.type) }}</span>
+                <span class="pc__interaction-meta">{{ it.residueName }} {{ it.residueNumber }} · {{ it.distance }} Å</span>
               </div>
             </div>
           </div>
-          
-          <div class="predict__result-section">
-            <h4 class="predict__result-section-title">相互作用分析</h4>
-            <div class="predict__interaction-list">
-              <div 
-                v-for="(interaction, index) in predictionResult.interactions" 
-                :key="index"
-                class="predict__interaction-item"
-              >
-                <div class="predict__interaction-type" :style="{ background: getInteractionBgColor(interaction.type), color: getInteractionColor(interaction.type) }">
-                  <span class="predict__interaction-icon">{{ getInteractionIcon(interaction.type) }}</span>
-                  {{ getInteractionTypeName(interaction.type) }}
-                </div>
-                <div class="predict__interaction-info">
-                  <span class="predict__interaction-residue">{{ interaction.residueName }} {{ interaction.residueNumber }}</span>
-                  <span class="predict__interaction-distance">距离: {{ interaction.distance }} Å</span>
-                </div>
-              </div>
+
+          <div class="pc__section">
+            <h4 class="pc__section-title">数据集信息</h4>
+            <div class="pc__dataset">
+              <div class="pc__dataset-item"><span>名称</span><b>{{ predictionResult.datasetInfo.name }}</b></div>
+              <div class="pc__dataset-item"><span>大小</span><b>{{ formatNumber(predictionResult.datasetInfo.size) }} 条记录</b></div>
+              <div class="pc__dataset-item"><span>数据源</span><b>{{ predictionResult.datasetInfo.description }}</b></div>
             </div>
           </div>
-          
-          <div class="predict__result-section">
-            <h4 class="predict__result-section-title">数据集信息</h4>
-            <div class="predict__dataset-info">
-              <div class="predict__dataset-item">
-                <span class="predict__dataset-label">数据集名称</span>
-                <span class="predict__dataset-value">{{ predictionResult.datasetInfo.name }}</span>
-              </div>
-              <div class="predict__dataset-item">
-                <span class="predict__dataset-label">数据集大小</span>
-                <span class="predict__dataset-value">{{ formatNumber(predictionResult.datasetInfo.size) }} 条记录</span>
-              </div>
-              <div class="predict__dataset-item">
-                <span class="predict__dataset-label">数据源</span>
-                <span class="predict__dataset-value">{{ predictionResult.datasetInfo.description }}</span>
-              </div>
-            </div>
-          </div>
-          
-          <div class="predict__result-actions">
-            <button class="predict__btn predict__btn--secondary">
-              <svg class="predict__btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                <polyline points="7 10 12 15 17 10"></polyline>
-                <line x1="12" y1="15" x2="12" y2="3"></line>
-              </svg>
+
+          <div class="pc__result-actions">
+            <button class="pc__btn pc__btn--secondary">
+              <svg class="pc__btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
               保存结果
             </button>
-            <button class="predict__btn predict__btn--primary">
-              <svg class="predict__btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
-                <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
-                <line x1="12" y1="22.08" x2="12" y2="12"></line>
-              </svg>
-              3D可视化
+            <button class="pc__btn pc__btn--primary">
+              <svg class="pc__btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+              3D 可视化
             </button>
           </div>
         </div>
@@ -326,13 +270,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { predictApi } from '@/api/predict'
+import { ref, computed, onUnmounted } from 'vue'
+import { predictApi, batchApi, type BatchStatus } from '@/api/predict'
 import Sidebar from '@/components/Sidebar.vue'
 import type { PredictionResult } from '@/types'
 
 const selectedType = ref<'ppi' | 'dti' | 'ddi'>('dti')
 const selectedInputType = ref<'pdb' | 'uniprot' | 'smiles' | 'csv'>('smiles')
+const mode = ref<'single' | 'batch'>('single')
 
 const firstInputValue = ref('')
 const secondInputValue = ref('')
@@ -480,15 +425,6 @@ const getConfidenceColor = (score: number): string => {
   return '#ef4444'
 }
 
-const getConfidenceBgColor = (level: string): string => {
-  const colors: Record<string, string> = {
-    high: 'rgba(16, 185, 129, 0.1)',
-    medium: 'rgba(245, 158, 11, 0.1)',
-    low: 'rgba(239, 68, 68, 0.1)'
-  }
-  return colors[level] || 'rgba(148, 163, 184, 0.1)'
-}
-
 const getConfidenceText = (level: string): string => {
   const texts: Record<string, string> = {
     high: '高',
@@ -609,6 +545,65 @@ const handlePredict = async () => {
     isLoading.value = false
   }
 }
+
+// ================= 批量预测 =================
+const batchFile = ref<File | null>(null)
+const batchAlgoType = ref('DTI')
+const batchUploading = ref(false)
+const batchError = ref('')
+const batchStatus = ref<BatchStatus | null>(null)
+let batchTimer: number | null = null
+
+const handleBatchFileChange = (e: Event) => {
+  const input = e.target as HTMLInputElement
+  batchFile.value = input.files?.[0] || null
+  batchError.value = ''
+}
+
+const handleBatchUpload = async () => {
+  if (!batchFile.value) return
+  batchUploading.value = true
+  batchError.value = ''
+  batchStatus.value = null
+  try {
+    const result = await batchApi.upload(batchFile.value, batchAlgoType.value)
+    startBatchPolling(result.batchId)
+  } catch (error: unknown) {
+    batchError.value = error instanceof Error ? error.message : '批量上传失败'
+  } finally {
+    batchUploading.value = false
+  }
+}
+
+const startBatchPolling = (batchId: string) => {
+  if (batchTimer) clearInterval(batchTimer)
+  batchTimer = window.setInterval(async () => {
+    try {
+      const status = await batchApi.getStatus(batchId)
+      batchStatus.value = status
+      if (status.status === 'SUCCESS' || status.status === 'FAIL') {
+        if (batchTimer) clearInterval(batchTimer)
+        batchTimer = null
+      }
+    } catch {
+      if (batchTimer) clearInterval(batchTimer)
+      batchTimer = null
+    }
+  }, 2000)
+}
+
+const handleBatchDownload = async () => {
+  if (!batchStatus.value) return
+  try {
+    await batchApi.download(batchStatus.value.batchId)
+  } catch (error: unknown) {
+    batchError.value = error instanceof Error ? error.message : '下载失败'
+  }
+}
+
+onUnmounted(() => {
+  if (batchTimer) clearInterval(batchTimer)
+})
 </script>
 
 <style lang="scss" scoped>
@@ -1088,6 +1083,84 @@ const handlePredict = async () => {
   text-align: center;
 }
 
+.predict__batch {
+  margin-top: $spacing-xl;
+}
+
+.predict__batch-card {
+  background: $bg-primary;
+  border: 1px solid $border-light;
+  border-radius: $border-radius-xl;
+  padding: $spacing-xl;
+}
+
+.predict__batch-header {
+  margin-bottom: $spacing-lg;
+}
+
+.predict__batch-title {
+  font-size: $font-size-lg;
+  font-weight: 600;
+  color: $text-primary;
+  margin-bottom: $spacing-xs;
+}
+
+.predict__batch-subtitle {
+  font-size: $font-size-sm;
+  color: $text-muted;
+}
+
+.predict__batch-row {
+  display: flex;
+  gap: $spacing-md;
+  align-items: center;
+}
+
+.predict__batch-select {
+  padding: $spacing-sm $spacing-md;
+  border: 1px solid $border-color;
+  border-radius: $border-radius-md;
+  font-size: $font-size-base;
+  background: $bg-tertiary;
+}
+
+.predict__batch-file {
+  flex: 1;
+  padding: $spacing-sm;
+  font-size: $font-size-sm;
+}
+
+.predict__batch-status {
+  margin-top: $spacing-lg;
+  padding: $spacing-md;
+  background: $bg-tertiary;
+  border-radius: $border-radius-md;
+}
+
+.predict__batch-status-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: $font-size-sm;
+  color: $text-secondary;
+  margin-bottom: $spacing-sm;
+}
+
+.predict__batch-progress-track {
+  width: 100%;
+  height: 8px;
+  background: $border-color;
+  border-radius: $border-radius-md;
+  overflow: hidden;
+  margin-bottom: $spacing-md;
+}
+
+.predict__batch-progress-fill {
+  height: 100%;
+  background: $primary-color;
+  border-radius: $border-radius-md;
+  transition: width 0.3s ease;
+}
+
 .predict__btn {
   flex: 1;
   display: flex;
@@ -1416,6 +1489,690 @@ const handlePredict = async () => {
   display: flex;
   gap: $spacing-md;
   padding-top: $spacing-xl;
+  border-top: 1px solid $border-light;
+}
+</style>
+
+<style lang="scss" scoped>
+/* ===================== 预测中心（重构版） ===================== */
+.pc {
+  display: flex;
+  min-height: 100vh;
+  background: $bg-secondary;
+  padding-top: $header-height;
+}
+
+.pc__main {
+  flex: 1;
+  padding: $spacing-xl;
+  max-width: 1080px;
+}
+
+/* ---------- 页头 ---------- */
+.pc__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: $spacing-lg;
+  padding: $spacing-lg $spacing-xl;
+  background: $bg-primary;
+  border: 1px solid $border-color;
+  border-left: 4px solid $accent-color;
+  border-radius: $border-radius-lg;
+  box-shadow: $shadow-sm;
+  margin-bottom: $spacing-lg;
+}
+
+.pc__title {
+  font-size: $font-size-xl;
+  font-weight: 700;
+  color: $text-primary;
+}
+
+.pc__subtitle {
+  margin-top: $spacing-xs;
+  font-size: $font-size-sm;
+  color: $text-muted;
+}
+
+.pc__stats {
+  display: flex;
+  gap: $spacing-lg;
+}
+
+.pc__stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  b {
+    font-size: $font-size-xl;
+    color: $primary-color;
+  }
+  em {
+    font-style: normal;
+    font-size: $font-size-xs;
+    color: $text-muted;
+  }
+}
+
+/* ---------- Tabs ---------- */
+.pc__tabs {
+  display: inline-flex;
+  background: $bg-tertiary;
+  border-radius: $border-radius-md;
+  padding: 4px;
+  margin-bottom: $spacing-lg;
+  gap: 4px;
+}
+
+.pc__tab {
+  padding: $spacing-sm $spacing-lg;
+  border: none;
+  background: transparent;
+  border-radius: $border-radius-sm;
+  font-size: $font-size-base;
+  color: $text-secondary;
+  cursor: pointer;
+  transition: $transition-fast;
+  &:hover { color: $text-primary; }
+  &--active {
+    background: $bg-primary;
+    color: $primary-color;
+    font-weight: 600;
+    box-shadow: $shadow-sm;
+  }
+}
+
+/* ---------- 面板 / 卡片 ---------- */
+.pc__panel {
+  margin-bottom: $spacing-lg;
+}
+
+.pc__card {
+  background: $bg-primary;
+  border: 1px solid $border-color;
+  border-radius: $border-radius-lg;
+  padding: $spacing-xl;
+  box-shadow: $shadow-sm;
+}
+
+.pc__card-head {
+  margin-bottom: $spacing-lg;
+}
+
+.pc__card-title {
+  font-size: $font-size-lg;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.pc__card-sub {
+  margin-top: $spacing-xs;
+  font-size: $font-size-sm;
+  color: $text-muted;
+}
+
+/* ---------- 类型选择 ---------- */
+.pc__types {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: $spacing-md;
+}
+
+.pc__type {
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+  padding: $spacing-md;
+  border: 1px solid $border-color;
+  border-radius: $border-radius-md;
+  background: $bg-primary;
+  cursor: pointer;
+  transition: $transition-normal;
+  color: $text-secondary;
+  &:hover { border-color: $accent-light; }
+  &--active {
+    border-color: $accent-color;
+    background: rgba(59, 130, 246, 0.06);
+    color: $accent-color;
+    box-shadow: 0 0 0 1px $accent-color;
+  }
+}
+
+.pc__type-icon {
+  font-size: $font-size-xl;
+}
+
+.pc__type-name {
+  font-weight: 600;
+  font-size: $font-size-base;
+}
+
+.pc__form-subtitle {
+  margin: $spacing-lg 0 $spacing-md;
+  font-size: $font-size-sm;
+  color: $text-muted;
+}
+
+/* ---------- 输入区 ---------- */
+.pc__form {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: $spacing-md;
+  align-items: start;
+}
+
+.pc__input-block {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-xs;
+}
+
+.pc__input-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.pc__label {
+  font-size: $font-size-sm;
+  font-weight: 600;
+  color: $text-secondary;
+}
+
+.pc__clear {
+  border: none;
+  background: transparent;
+  color: $text-muted;
+  cursor: pointer;
+  font-size: $font-size-xs;
+  padding: 2px 6px;
+  border-radius: $border-radius-sm;
+  &:hover { color: $error-color; background: rgba(239, 68, 68, 0.08); }
+}
+
+.pc__input {
+  width: 100%;
+  padding: $spacing-md;
+  border: 1px solid $border-color;
+  border-radius: $border-radius-md;
+  font-size: $font-size-base;
+  color: $text-primary;
+  background: $bg-primary;
+  transition: $transition-fast;
+  &::placeholder { color: $text-light; }
+  &:focus {
+    outline: none;
+    border-color: $accent-color;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+  }
+  &--error {
+    border-color: $error-color;
+    &:focus { box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12); }
+  }
+}
+
+.pc__hint {
+  min-height: 18px;
+  font-size: $font-size-xs;
+}
+
+.pc__err { color: $error-color; }
+.pc__ok { color: $success-color; }
+
+.pc__vs {
+  display: flex;
+  align-items: center;
+  align-self: center;
+  margin-top: 26px;
+  span {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: $bg-tertiary;
+    color: $text-muted;
+    font-size: $font-size-sm;
+    font-weight: 700;
+  }
+}
+
+/* ---------- 高级选项 ---------- */
+.pc__advanced {
+  margin-top: $spacing-lg;
+  border-top: 1px dashed $border-color;
+  padding-top: $spacing-md;
+}
+
+.pc__advanced-toggle {
+  border: none;
+  background: transparent;
+  color: $text-secondary;
+  font-size: $font-size-sm;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: $spacing-xs;
+  &:hover { color: $primary-color; }
+}
+
+.pc__chevron {
+  display: inline-block;
+  transition: $transition-fast;
+  &--open { transform: rotate(180deg); }
+}
+
+.pc__advanced-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: $spacing-lg;
+  margin-top: $spacing-md;
+  padding: $spacing-md;
+  background: $bg-tertiary;
+  border-radius: $border-radius-md;
+}
+
+.pc__advanced-item {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-sm;
+  &--row {
+    flex-direction: row;
+    align-items: center;
+    gap: $spacing-sm;
+    cursor: pointer;
+  }
+}
+
+.pc__advanced-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.pc__range {
+  width: 100%;
+  accent-color: $accent-color;
+}
+
+.pc__range-val {
+  font-size: $font-size-sm;
+  font-weight: 600;
+  color: $accent-color;
+}
+
+.pc__checkbox {
+  display: inline-flex;
+  input { display: none; }
+  .pc__checkbox-box {
+    width: 18px;
+    height: 18px;
+    border: 1px solid $border-color;
+    border-radius: 4px;
+    position: relative;
+    transition: $transition-fast;
+  }
+  input:checked + .pc__checkbox-box {
+    background: $accent-color;
+    border-color: $accent-color;
+    &::after {
+      content: '';
+      position: absolute;
+      left: 5px;
+      top: 2px;
+      width: 5px;
+      height: 9px;
+      border: solid #fff;
+      border-width: 0 2px 2px 0;
+      transform: rotate(45deg);
+    }
+  }
+}
+
+.pc__desc {
+  font-size: $font-size-xs;
+  color: $text-muted;
+}
+
+/* ---------- 操作按钮 ---------- */
+.pc__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: $spacing-md;
+  margin-top: $spacing-lg;
+}
+
+.pc__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: $spacing-xs;
+  padding: $spacing-sm $spacing-lg;
+  border-radius: $border-radius-md;
+  border: none;
+  font-size: $font-size-base;
+  cursor: pointer;
+  transition: $transition-fast;
+  &--primary {
+    background: $primary-color;
+    color: #fff;
+    &:hover:not(:disabled) { background: $primary-light; }
+  }
+  &--secondary {
+    background: $bg-tertiary;
+    color: $text-secondary;
+    border: 1px solid $border-color;
+    &:hover:not(:disabled) { background: $border-light; }
+  }
+  &--ghost {
+    background: transparent;
+    color: $accent-color;
+    &:hover { background: rgba(59, 130, 246, 0.08); }
+  }
+  &--block { width: 100%; }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+}
+
+.pc__btn-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.pc__spin {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: pc-spin 0.6s linear infinite;
+}
+
+@keyframes pc-spin {
+  to { transform: rotate(360deg); }
+}
+
+.pc__error {
+  margin-top: $spacing-md;
+  padding: $spacing-sm $spacing-md;
+  border-radius: $border-radius-md;
+  background: rgba(239, 68, 68, 0.08);
+  color: $error-color;
+  font-size: $font-size-sm;
+  text-align: center;
+}
+
+/* ---------- 批量预测 ---------- */
+.pc__batch-body {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-md;
+}
+
+.pc__select {
+  padding: $spacing-sm $spacing-md;
+  border: 1px solid $border-color;
+  border-radius: $border-radius-md;
+  font-size: $font-size-base;
+  background: $bg-primary;
+  color: $text-primary;
+  align-self: flex-start;
+  min-width: 160px;
+  &:focus { outline: none; border-color: $accent-color; }
+}
+
+.pc__dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: $spacing-xs;
+  padding: $spacing-xl;
+  border: 2px dashed $border-color;
+  border-radius: $border-radius-md;
+  background: $bg-secondary;
+  cursor: pointer;
+  text-align: center;
+  transition: $transition-normal;
+  &:hover { border-color: $accent-light; background: rgba(59, 130, 246, 0.04); }
+  &--has { border-style: solid; border-color: $success-color; background: rgba(16, 185, 129, 0.05); }
+}
+
+.pc__file {
+  display: none;
+}
+
+.pc__dropzone-icon {
+  font-size: $font-size-3xl;
+}
+
+.pc__dropzone-text {
+  font-size: $font-size-base;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.pc__dropzone-sub {
+  font-size: $font-size-xs;
+  color: $text-muted;
+}
+
+.pc__batch-status {
+  margin-top: $spacing-lg;
+  padding: $spacing-md;
+  background: $bg-tertiary;
+  border-radius: $border-radius-md;
+}
+
+.pc__batch-status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: $font-size-sm;
+  margin-bottom: $spacing-sm;
+}
+
+.pc__batch-id {
+  color: $text-secondary;
+  font-family: monospace;
+}
+
+.pc__batch-pct {
+  font-weight: 700;
+  color: $text-primary;
+}
+
+.pc__batch-state {
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: $font-size-xs;
+  font-weight: 600;
+  &--pending { background: rgba(148, 163, 184, 0.15); color: $text-muted; }
+  &--processing { background: rgba(59, 130, 246, 0.12); color: $info-color; }
+  &--success { background: rgba(16, 185, 129, 0.12); color: $success-color; }
+  &--fail { background: rgba(239, 68, 68, 0.12); color: $error-color; }
+}
+
+.pc__progress {
+  width: 100%;
+  height: 8px;
+  background: $border-color;
+  border-radius: 999px;
+  overflow: hidden;
+  margin-bottom: $spacing-md;
+}
+
+.pc__progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, $accent-color, $accent-light);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+/* ---------- 结果 ---------- */
+.pc__result-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: $spacing-lg;
+}
+
+.pc__result-time {
+  display: block;
+  margin-top: $spacing-xs;
+  font-size: $font-size-xs;
+  color: $text-muted;
+}
+
+.pc__badge {
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(59, 130, 246, 0.1);
+  color: $accent-color;
+  font-size: $font-size-xs;
+  font-weight: 600;
+}
+
+.pc__result-grid {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: $spacing-xl;
+  padding: $spacing-lg;
+  background: $bg-secondary;
+  border-radius: $border-radius-md;
+}
+
+.pc__score {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: $spacing-sm;
+}
+
+.pc__score-ring {
+  position: relative;
+  width: 120px;
+  height: 120px;
+}
+
+.pc__score-svg {
+  width: 100%;
+  height: 100%;
+}
+
+.pc__score-num {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: $font-size-xl;
+  font-weight: 700;
+  color: $text-primary;
+}
+
+.pc__score-label {
+  font-size: $font-size-sm;
+  color: $text-muted;
+}
+
+.pc__score-level {
+  font-size: $font-size-sm;
+  font-weight: 600;
+}
+
+.pc__details {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: $spacing-md;
+}
+
+.pc__detail {
+  display: flex;
+  align-items: baseline;
+  gap: $spacing-md;
+  &--accent .pc__detail-val { color: $accent-color; font-size: $font-size-xl; }
+}
+
+.pc__detail-label {
+  width: 90px;
+  font-size: $font-size-sm;
+  color: $text-muted;
+}
+
+.pc__detail-val {
+  font-size: $font-size-lg;
+  font-weight: 600;
+  color: $text-primary;
+  small { font-size: $font-size-xs; font-weight: 400; color: $text-muted; }
+}
+
+.pc__section {
+  margin-top: $spacing-lg;
+}
+
+.pc__section-title {
+  font-size: $font-size-base;
+  font-weight: 600;
+  color: $text-primary;
+  margin-bottom: $spacing-md;
+  padding-bottom: $spacing-sm;
+  border-bottom: 1px solid $border-light;
+}
+
+.pc__interactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-md;
+}
+
+.pc__interaction {
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+  padding: $spacing-sm $spacing-md;
+  border: 1px solid $border-color;
+  border-radius: $border-radius-md;
+  background: $bg-primary;
+}
+
+.pc__interaction-tag {
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: $font-size-xs;
+  font-weight: 600;
+}
+
+.pc__interaction-meta {
+  font-size: $font-size-sm;
+  color: $text-secondary;
+}
+
+.pc__dataset {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: $spacing-md;
+}
+
+.pc__dataset-item {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-xs;
+  padding: $spacing-md;
+  background: $bg-tertiary;
+  border-radius: $border-radius-md;
+  span { font-size: $font-size-xs; color: $text-muted; }
+  b { font-size: $font-size-sm; color: $text-primary; }
+}
+
+.pc__result-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: $spacing-md;
+  margin-top: $spacing-lg;
+  padding-top: $spacing-lg;
   border-top: 1px solid $border-light;
 }
 </style>

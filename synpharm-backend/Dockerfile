@@ -12,6 +12,9 @@ FROM maven:3.9.6-eclipse-temurin-17 AS build
 
 WORKDIR /build
 
+# 使用阿里云 Maven 镜像加速依赖下载（国内网络）
+COPY maven-settings.xml /root/.m2/settings.xml
+
 # 先复制 pom.xml，利用 Docker 层缓存避免每次重新下载依赖
 COPY pom.xml .
 RUN mvn -B dependency:go-offline

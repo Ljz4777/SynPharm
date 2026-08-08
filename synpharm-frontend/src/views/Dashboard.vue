@@ -1,84 +1,71 @@
 <template>
-  <div class="dashboard">
+  <div class="db">
     <Sidebar />
-    <main class="dashboard__content">
-      <header class="dashboard__header">
+    <main class="db__main">
+      <header class="db__header">
         <div>
-          <h1 class="dashboard__title">仪表盘</h1>
-          <p class="dashboard__subtitle">欢迎回来，{{ authStore.userNickname }}</p>
+          <h1 class="db__title">仪表盘</h1>
+          <p class="db__subtitle">欢迎回来，{{ authStore.userNickname }}</p>
         </div>
-        <div class="dashboard__header-right">
-          <span class="dashboard__date">{{ currentDate }}</span>
-        </div>
+        <span class="db__date">{{ currentDate }}</span>
       </header>
-      
-      <section class="dashboard__stats">
-        <div class="dashboard__stat-card">
-          <div class="dashboard__stat-icon">📊</div>
-          <div class="dashboard__stat-info">
-            <span class="dashboard__stat-value">{{ stats.totalTasks }}</span>
-            <span class="dashboard__stat-label">总任务数</span>
+
+      <section class="db__stats">
+        <div class="db__stat">
+          <span class="db__stat-icon">📊</span>
+          <div class="db__stat-info">
+            <b class="db__stat-value">{{ stats.totalTasks }}</b>
+            <span class="db__stat-label">总任务数</span>
           </div>
         </div>
-        <div class="dashboard__stat-card">
-          <div class="dashboard__stat-icon">✅</div>
-          <div class="dashboard__stat-info">
-            <span class="dashboard__stat-value">{{ stats.completedTasks }}</span>
-            <span class="dashboard__stat-label">已完成</span>
+        <div class="db__stat">
+          <span class="db__stat-icon">✅</span>
+          <div class="db__stat-info">
+            <b class="db__stat-value">{{ stats.completedTasks }}</b>
+            <span class="db__stat-label">已完成</span>
           </div>
         </div>
-        <div class="dashboard__stat-card">
-          <div class="dashboard__stat-icon">⏳</div>
-          <div class="dashboard__stat-info">
-            <span class="dashboard__stat-value">{{ stats.runningTasks }}</span>
-            <span class="dashboard__stat-label">运行中</span>
+        <div class="db__stat">
+          <span class="db__stat-icon">⏳</span>
+          <div class="db__stat-info">
+            <b class="db__stat-value">{{ stats.runningTasks }}</b>
+            <span class="db__stat-label">运行中</span>
           </div>
         </div>
-        <div class="dashboard__stat-card">
-          <div class="dashboard__stat-icon">🎯</div>
-          <div class="dashboard__stat-info">
-            <span class="dashboard__stat-value">{{ stats.averageConfidence }}%</span>
-            <span class="dashboard__stat-label">平均置信度</span>
+        <div class="db__stat">
+          <span class="db__stat-icon">🎯</span>
+          <div class="db__stat-info">
+            <b class="db__stat-value">{{ stats.averageConfidence }}%</b>
+            <span class="db__stat-label">平均置信度</span>
           </div>
         </div>
       </section>
-      
-      <section class="dashboard__main">
-        <div class="dashboard__section">
-          <div class="dashboard__section-header">
-            <h2 class="dashboard__section-title">最近任务</h2>
-            <router-link to="/tasks" class="dashboard__section-link">查看全部</router-link>
+
+      <section class="db__sections">
+        <div class="db__card">
+          <div class="db__card-head">
+            <h2 class="db__card-title">最近任务</h2>
+            <router-link to="/tasks" class="db__link">查看全部</router-link>
           </div>
-          <div class="dashboard__tasks">
-            <div 
-              v-for="task in recentTasks" 
-              :key="task.id"
-              class="dashboard__task-item"
-            >
-              <div class="dashboard__task-info">
-                <span class="dashboard__task-name">{{ task.name || task.id }}</span>
-                <span class="dashboard__task-type">{{ task.type }}</span>
+          <div class="db__tasks">
+            <div v-for="task in recentTasks" :key="task.id" class="db__task">
+              <div class="db__task-info">
+                <span class="db__task-name">{{ task.name || task.id }}</span>
+                <span class="db__task-type">{{ task.type }}</span>
               </div>
-              <div class="dashboard__task-status">
-                <span 
-                  class="dashboard__status-badge"
-                  :class="`dashboard__status-badge--${task.status}`"
-                >
-                  {{ getStatusText(task.status) }}
-                </span>
-              </div>
+              <span class="db__status" :class="`db__status--${task.status}`">{{ getStatusText(task.status) }}</span>
             </div>
           </div>
         </div>
-        
-        <div class="dashboard__section">
-          <div class="dashboard__section-header">
-            <h2 class="dashboard__section-title">最近结果</h2>
-            <router-link to="/results" class="dashboard__section-link">查看全部</router-link>
+
+        <div class="db__card">
+          <div class="db__card-head">
+            <h2 class="db__card-title">最近结果</h2>
+            <router-link to="/results" class="db__link">查看全部</router-link>
           </div>
-          <div class="dashboard__results">
-            <ResultCard 
-              v-for="result in recentResults" 
+          <div class="db__results">
+            <ResultCard
+              v-for="result in recentResults"
               :key="result.id"
               :result="result"
               @detail="handleResultDetail"
@@ -161,11 +148,11 @@ const handleResult3D = (result: PredictionResult) => {
   display: flex;
   min-height: 100vh;
   background: $bg-secondary;
+  padding-top: $header-height;
 }
 
 .dashboard__content {
   flex: 1;
-  margin-left: $sidebar-width;
   padding: $spacing-lg $spacing-xl;
 }
 
@@ -350,5 +337,171 @@ const handleResult3D = (result: PredictionResult) => {
   display: grid;
   grid-template-columns: 1fr;
   gap: $spacing-lg;
+}
+</style>
+
+<style lang="scss" scoped>
+/* ===================== 仪表盘（新风格） ===================== */
+.db {
+  display: flex;
+  min-height: 100vh;
+  background: $bg-secondary;
+  padding-top: $header-height;
+}
+
+.db__main {
+  flex: 1;
+  padding: $spacing-xl;
+  max-width: 1100px;
+}
+
+.db__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: $spacing-lg;
+}
+
+.db__title {
+  font-size: $font-size-2xl;
+  font-weight: 700;
+  color: $text-primary;
+}
+
+.db__subtitle {
+  margin-top: $spacing-xs;
+  font-size: $font-size-sm;
+  color: $text-muted;
+}
+
+.db__date {
+  font-size: $font-size-sm;
+  color: $text-secondary;
+  background: $bg-tertiary;
+  padding: $spacing-xs $spacing-md;
+  border-radius: 999px;
+}
+
+.db__stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: $spacing-md;
+  margin-bottom: $spacing-lg;
+}
+
+.db__stat {
+  display: flex;
+  align-items: center;
+  gap: $spacing-md;
+  padding: $spacing-md $spacing-lg;
+  background: $bg-primary;
+  border: 1px solid $border-color;
+  border-radius: $border-radius-lg;
+  box-shadow: $shadow-sm;
+}
+
+.db__stat-icon {
+  font-size: $font-size-2xl;
+}
+
+.db__stat-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.db__stat-value {
+  font-size: $font-size-2xl;
+  font-weight: 700;
+  color: $text-primary;
+}
+
+.db__stat-label {
+  font-size: $font-size-xs;
+  color: $text-muted;
+}
+
+.db__sections {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: $spacing-lg;
+  align-items: start;
+}
+
+.db__card {
+  background: $bg-primary;
+  border: 1px solid $border-color;
+  border-radius: $border-radius-lg;
+  padding: $spacing-lg;
+  box-shadow: $shadow-sm;
+}
+
+.db__card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: $spacing-md;
+}
+
+.db__card-title {
+  font-size: $font-size-lg;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.db__link {
+  font-size: $font-size-sm;
+  color: $accent-color;
+  text-decoration: none;
+  &:hover { text-decoration: underline; }
+}
+
+.db__tasks {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-sm;
+}
+
+.db__task {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: $spacing-sm $spacing-md;
+  background: $bg-secondary;
+  border-radius: $border-radius-md;
+}
+
+.db__task-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.db__task-name {
+  font-size: $font-size-sm;
+  font-weight: 500;
+  color: $text-primary;
+}
+
+.db__task-type {
+  font-size: $font-size-xs;
+  color: $text-muted;
+}
+
+.db__status {
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: $font-size-xs;
+  font-weight: 500;
+  &--completed { background: rgba(16, 185, 129, 0.12); color: $success-color; }
+  &--running { background: rgba(59, 130, 246, 0.12); color: $info-color; }
+  &--pending { background: rgba(148, 163, 184, 0.15); color: $text-muted; }
+  &--failed { background: rgba(239, 68, 68, 0.12); color: $error-color; }
+}
+
+.db__results {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-md;
 }
 </style>

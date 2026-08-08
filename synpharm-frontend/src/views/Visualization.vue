@@ -155,11 +155,11 @@ const exportImage = () => {
   display: flex;
   min-height: 100vh;
   background: $bg-secondary;
+  padding-top: $header-height;
 }
 
 .visualization__content {
   flex: 1;
-  margin-left: $sidebar-width;
   padding: $spacing-lg;
 }
 

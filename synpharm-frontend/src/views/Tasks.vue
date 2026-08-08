@@ -1,91 +1,63 @@
 <template>
-  <div class="tasks">
+  <div class="tk">
     <Sidebar />
-    <main class="tasks__content">
-      <header class="tasks__header">
+    <main class="tk__main">
+      <header class="tk__header">
         <div>
-          <h1 class="tasks__title">任务管理</h1>
-          <p class="tasks__subtitle">查看和管理所有预测任务</p>
+          <h1 class="tk__title">任务管理</h1>
+          <p class="tk__subtitle">查看和管理所有预测任务</p>
         </div>
-        <button class="tasks__btn tasks__btn--primary">
-          创建任务
-        </button>
+        <button class="tk__btn tk__btn--primary">创建任务</button>
       </header>
-      
-      <section class="tasks__tabs">
-        <button 
-          v-for="tab in tabs" 
+
+      <div class="tk__tabs">
+        <button
+          v-for="tab in tabs"
           :key="tab.value"
           @click="activeTab = tab.value"
-          class="tasks__tab"
-          :class="{ 'tasks__tab--active': activeTab === tab.value }"
+          class="tk__tab"
+          :class="{ 'tk__tab--active': activeTab === tab.value }"
         >
           {{ tab.label }}
-          <span v-if="tab.count > 0" class="tasks__tab-count">{{ tab.count }}</span>
+          <span v-if="tab.count > 0" class="tk__tab-count">{{ tab.count }}</span>
         </button>
-      </section>
-      
-      <section class="tasks__list">
-        <div 
-          v-for="task in filteredTasks" 
-          :key="task.id"
-          class="tasks__card"
-        >
-          <div class="tasks__card-header">
-            <div class="tasks__card-info">
-              <span class="tasks__card-name">{{ task.taskNo || task.name || task.id }}</span>
-              <span class="tasks__card-type">{{ getTypeText(task.predictType || task.type || '') }}</span>
+      </div>
+
+      <section class="tk__list">
+        <div v-if="loading" class="tk__state">加载中...</div>
+        <div v-else-if="loadError" class="tk__state tk__state--error">{{ loadError }}</div>
+        <template v-else>
+          <div v-for="task in filteredTasks" :key="task.id" class="tk__card">
+            <div class="tk__card-head">
+              <div class="tk__card-info">
+                <span class="tk__card-name">{{ task.taskNo || task.name || task.id }}</span>
+                <span class="tk__card-type">{{ getTypeText(task.predictType || task.type || '') }}</span>
+              </div>
+              <span class="tk__status" :class="`tk__status--${task.status}`">{{ getStatusText(task.status) }}</span>
             </div>
-            <span 
-              class="tasks__status"
-              :class="`tasks__status--${task.status}`"
-            >
-              {{ getStatusText(task.status) }}
-            </span>
-          </div>
-          
-          <div v-if="task.status === 'running'" class="tasks__progress">
-            <div class="tasks__progress-track">
-              <div 
-                class="tasks__progress-fill"
-                :style="{ width: task.progress + '%' }"
-              ></div>
+
+            <div v-if="task.status === 'running'" class="tk__progress">
+              <div class="tk__progress-track">
+                <div class="tk__progress-fill" :style="{ width: task.progress + '%' }"></div>
+              </div>
+              <span class="tk__progress-text">{{ task.progress }}%</span>
             </div>
-            <span class="tasks__progress-text">{{ task.progress }}%</span>
-          </div>
-          
-          <div class="tasks__card-footer">
-            <span class="tasks__card-date">{{ formatDate(task.createdAt) }}</span>
-            <div class="tasks__card-actions">
-              <button 
-                v-if="task.status === 'running'" 
-                class="tasks__action-btn"
-                @click="handlePause(task)"
-              >
-                暂停
-              </button>
-              <button 
-                v-if="task.status === 'completed'" 
-                class="tasks__action-btn"
-                @click="handleView(task)"
-              >
-                查看结果
-              </button>
-              <button 
-                v-if="task.status !== 'running'" 
-                class="tasks__action-btn"
-                @click="handleDelete(task)"
-              >
-                删除
-              </button>
+
+            <div class="tk__card-foot">
+              <span class="tk__date">{{ formatDate(task.createdAt) }}</span>
+              <div class="tk__actions">
+                <button v-if="task.status === 'running'" class="tk__action" @click="handlePause(task)">暂停</button>
+                <button v-if="task.status === 'completed'" class="tk__action" @click="handleView(task)">查看结果</button>
+                <button v-if="task.status !== 'running'" class="tk__action tk__action--danger" @click="handleDelete(task)">删除</button>
+              </div>
             </div>
           </div>
-        </div>
-        
-        <div v-if="filteredTasks.length === 0" class="tasks__empty">
-          <span class="tasks__empty-icon">📋</span>
-          <span class="tasks__empty-text">暂无{{ getTabLabel(activeTab) }}任务</span>
-        </div>
+
+          <div v-if="filteredTasks.length === 0" class="tk__empty">
+            <span class="tk__empty-icon">📋</span>
+            <span class="tk__empty-text">暂无{{ getTabLabel(activeTab) }}任务</span>
+          </div>
+        </template>
       </section>
     </main>
   </div>
@@ -190,11 +162,11 @@ const handleDelete = (task: Task) => {
   display: flex;
   min-height: 100vh;
   background: $bg-secondary;
+  padding-top: $header-height;
 }
 
 .tasks__content {
   flex: 1;
-  margin-left: $sidebar-width;
   padding: $spacing-lg;
 }
 
@@ -415,5 +387,228 @@ const handleDelete = (task: Task) => {
 .tasks__empty-text {
   font-size: $font-size-base;
   color: $text-muted;
+}
+</style>
+
+<style lang="scss" scoped>
+/* ===================== 任务管理（新风格） ===================== */
+.tk {
+  display: flex;
+  min-height: 100vh;
+  background: $bg-secondary;
+  padding-top: $header-height;
+}
+
+.tk__main {
+  flex: 1;
+  padding: $spacing-xl;
+  max-width: 900px;
+}
+
+.tk__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: $spacing-lg;
+}
+
+.tk__title {
+  font-size: $font-size-2xl;
+  font-weight: 700;
+  color: $text-primary;
+}
+
+.tk__subtitle {
+  margin-top: $spacing-xs;
+  font-size: $font-size-sm;
+  color: $text-muted;
+}
+
+.tk__btn {
+  padding: $spacing-sm $spacing-lg;
+  border: none;
+  border-radius: $border-radius-md;
+  font-size: $font-size-sm;
+  cursor: pointer;
+  transition: $transition-fast;
+  &--primary {
+    background: $primary-color;
+    color: #fff;
+    &:hover { background: $primary-light; }
+  }
+}
+
+.tk__tabs {
+  display: inline-flex;
+  background: $bg-tertiary;
+  border-radius: $border-radius-md;
+  padding: 4px;
+  gap: 4px;
+  margin-bottom: $spacing-lg;
+}
+
+.tk__tab {
+  padding: $spacing-sm $spacing-lg;
+  border: none;
+  background: transparent;
+  border-radius: $border-radius-sm;
+  font-size: $font-size-sm;
+  color: $text-secondary;
+  cursor: pointer;
+  transition: $transition-fast;
+  &:hover { color: $text-primary; }
+  &--active {
+    background: $bg-primary;
+    color: $primary-color;
+    font-weight: 600;
+    box-shadow: $shadow-sm;
+  }
+}
+
+.tk__tab-count {
+  margin-left: 4px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(59, 130, 246, 0.15);
+  color: $accent-color;
+  font-size: $font-size-xs;
+}
+
+.tk__list {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-md;
+}
+
+.tk__state {
+  padding: $spacing-2xl;
+  text-align: center;
+  color: $text-muted;
+  &--error { color: $error-color; }
+}
+
+.tk__card {
+  background: $bg-primary;
+  border: 1px solid $border-color;
+  border-radius: $border-radius-lg;
+  padding: $spacing-md $spacing-lg;
+  box-shadow: $shadow-sm;
+}
+
+.tk__card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.tk__card-info {
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+}
+
+.tk__card-name {
+  font-size: $font-size-base;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.tk__card-type {
+  padding: 2px 8px;
+  background: $bg-tertiary;
+  border-radius: 999px;
+  font-size: $font-size-xs;
+  color: $text-secondary;
+}
+
+.tk__status {
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: $font-size-xs;
+  font-weight: 500;
+  &--completed { background: rgba(16, 185, 129, 0.12); color: $success-color; }
+  &--running { background: rgba(59, 130, 246, 0.12); color: $info-color; }
+  &--pending { background: rgba(148, 163, 184, 0.15); color: $text-muted; }
+  &--failed { background: rgba(239, 68, 68, 0.12); color: $error-color; }
+  &--cancelled { background: rgba(148, 163, 184, 0.15); color: $text-muted; }
+}
+
+.tk__progress {
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+  margin-top: $spacing-md;
+}
+
+.tk__progress-track {
+  flex: 1;
+  height: 6px;
+  background: $border-color;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.tk__progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, $accent-color, $accent-light);
+  border-radius: 999px;
+  transition: width 0.3s;
+}
+
+.tk__progress-text {
+  font-size: $font-size-xs;
+  color: $text-muted;
+}
+
+.tk__card-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: $spacing-md;
+  padding-top: $spacing-sm;
+  border-top: 1px solid $border-light;
+}
+
+.tk__date {
+  font-size: $font-size-xs;
+  color: $text-muted;
+}
+
+.tk__actions {
+  display: flex;
+  gap: $spacing-sm;
+}
+
+.tk__action {
+  border: none;
+  background: transparent;
+  color: $accent-color;
+  font-size: $font-size-xs;
+  cursor: pointer;
+  padding: $spacing-xs $spacing-sm;
+  border-radius: $border-radius-sm;
+  transition: $transition-fast;
+  &:hover { background: rgba(59, 130, 246, 0.08); }
+  &--danger {
+    color: $error-color;
+    &:hover { background: rgba(239, 68, 68, 0.08); }
+  }
+}
+
+.tk__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: $spacing-3xl;
+  color: $text-muted;
+}
+
+.tk__empty-icon {
+  font-size: 40px;
+  margin-bottom: $spacing-md;
+}
+
+.tk__empty-text {
+  font-size: $font-size-base;
 }
 </style>

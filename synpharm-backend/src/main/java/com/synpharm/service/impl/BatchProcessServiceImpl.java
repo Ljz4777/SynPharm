@@ -7,6 +7,7 @@ import com.synpharm.dto.response.BatchUploadResponse;
 import com.synpharm.dto.response.PredictResultResponse;
 import com.synpharm.exception.BusinessException;
 import com.synpharm.model.entity.BatchTask;
+import com.synpharm.mq.BatchTaskProducer;
 import com.synpharm.pipeline.PipelineFactory;
 import com.synpharm.repository.mapper.BatchTaskMapper;
 import com.synpharm.service.BatchProcessService;
@@ -20,9 +21,10 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
@@ -40,6 +42,7 @@ public class BatchProcessServiceImpl implements BatchProcessService {
     private final PipelineFactory pipelineFactory;
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
+    private final BatchTaskProducer batchTaskProducer;
 
     @Value("${file.upload-dir:./uploads}")
     private String uploadDir;
@@ -75,11 +78,18 @@ public class BatchProcessServiceImpl implements BatchProcessService {
             task.setFailCount(0);
             task.setProgress(BigDecimal.ZERO);
             task.setStatus(0);
+            task.setAlgoType(algoType);
             batchTaskMapper.insert(task);
 
             saveProgress(batchId, task);
 
-            submitBatchTask(batchId, algoType);
+            // 事务提交后再发送消息，避免消费者在事务未提交时读到不到记录（batch_task 为权威）
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    batchTaskProducer.sendBatchTask(batchId, algoType);
+                }
+            });
 
             return BatchUploadResponse.builder()
                     .batchId(batchId)
@@ -94,23 +104,24 @@ public class BatchProcessServiceImpl implements BatchProcessService {
     }
 
     @Override
-    @Async("batchTaskExecutor")
-    public void submitBatchTask(String batchId, String algoType) {
-        processBatch(batchId, algoType);
-    }
-
-    @Override
     public void processBatch(String batchId, String algoType) {
         log.info("开始处理批量任务: {}", batchId);
 
-        BatchTask task = getProgress(batchId);
+        // 以 DB 为权威（Redis 仅缓存），消息消费时从 DB 读取
+        BatchTask task = batchTaskMapper.selectByBatchId(batchId);
         if (task == null) {
-            task = batchTaskMapper.selectByBatchId(batchId);
-            if (task == null) {
-                log.error("批量任务不存在: {}", batchId);
-                return;
-            }
-            saveProgress(batchId, task);
+            log.error("批量任务不存在: {}", batchId);
+            return;
+        }
+
+        // 幂等：已在处理中/已完成则跳过（防重复消费/重复投递）
+        if (task.getStatus() != null && (task.getStatus() == 1 || task.getStatus() == 2)) {
+            log.info("批量任务已在处理或已完成, 跳过: batchId={}, status={}", batchId, task.getStatus());
+            return;
+        }
+
+        if (algoType != null && !algoType.isBlank()) {
+            task.setAlgoType(algoType);
         }
 
         task.setStatus(1);
@@ -196,14 +207,15 @@ public class BatchProcessServiceImpl implements BatchProcessService {
     }
 
     @Override
-    public BatchStatusResponse getBatchStatus(String batchId) {
-        BatchTask task = getProgress(batchId);
-
+    public BatchStatusResponse getBatchStatus(String batchId, Long userId) {
+        BatchTask task = batchTaskMapper.selectByBatchId(batchId);
         if (task == null) {
-            task = batchTaskMapper.selectByBatchId(batchId);
-            if (task == null) {
-                throw new BusinessException("批次任务不存在");
-            }
+            throw new BusinessException("批次任务不存在");
+        }
+
+        // 归属校验：仅本人可查看（修复 IDOR）
+        if (userId != null && !userId.equals(task.getUserId())) {
+            throw new BusinessException("无权访问该批次任务");
         }
 
         String statusText = switch (task.getStatus()) {
@@ -216,6 +228,7 @@ public class BatchProcessServiceImpl implements BatchProcessService {
 
         return BatchStatusResponse.builder()
                 .batchId(task.getBatchId())
+                .algoType(task.getAlgoType())
                 .totalCount(task.getTotalCount())
                 .successCount(task.getSuccessCount())
                 .failCount(task.getFailCount())
@@ -228,10 +241,15 @@ public class BatchProcessServiceImpl implements BatchProcessService {
     }
 
     @Override
-    public ResponseEntity<Resource> downloadBatch(String batchId) {
+    public ResponseEntity<Resource> downloadBatch(String batchId, Long userId) {
         BatchTask task = batchTaskMapper.selectByBatchId(batchId);
         if (task == null) {
             throw new BusinessException("批次任务不存在");
+        }
+
+        // 归属校验：仅本人可下载（修复 IDOR）
+        if (userId != null && !userId.equals(task.getUserId())) {
+            throw new BusinessException("无权访问该批次任务");
         }
 
         String resultPath = resultDir + "/" + batchId + "_result.csv";

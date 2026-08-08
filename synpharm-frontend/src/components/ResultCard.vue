@@ -14,7 +14,7 @@
       <div class="result-card__affinity">
         <span class="result-card__affinity-label">结合亲和力</span>
         <div class="result-card__affinity-value-wrap">
-          <span class="result-card__affinity-value">{{ result.bindingAffinity.toFixed(2) }}</span>
+          <span class="result-card__affinity-value">{{ result.bindingAffinity?.toFixed?.(2) ?? '-' }}</span>
           <span class="result-card__affinity-unit">kcal/mol</span>
         </div>
       </div>
@@ -25,14 +25,14 @@
           <div class="result-card__confidence-track">
             <div 
               class="result-card__confidence-fill" 
-              :style="{ 
-                width: (result.confidenceScore * 100) + '%',
-                background: getConfidenceColor(result.confidenceScore)
+              :style="{
+                width: ((result.confidenceScore ?? 0) * 100) + '%',
+                background: getConfidenceColor(result.confidenceScore ?? 0)
               }"
             ></div>
           </div>
-          <span class="result-card__confidence-value" :style="{ color: getConfidenceColor(result.confidenceScore) }">
-            {{ Math.round(result.confidenceScore * 100) }}%
+          <span class="result-card__confidence-value" :style="{ color: getConfidenceColor(result.confidenceScore ?? 0) }">
+            {{ Math.round((result.confidenceScore ?? 0) * 100) }}%
           </span>
         </div>
       </div>
@@ -42,15 +42,15 @@
       <span class="result-card__interactions-label">相互作用类型</span>
       <div class="result-card__interaction-tags">
         <span 
-          v-for="(interaction, index) in result.interactions.slice(0, 4)" 
+          v-for="(interaction, index) in (result.interactions || []).slice(0, 4)" 
           :key="index"
           class="result-card__interaction-tag"
           :style="{ background: getInteractionColor(interaction.type) }"
         >
           {{ getInteractionTypeName(interaction.type) }}
         </span>
-        <span v-if="result.interactions.length > 4" class="result-card__interaction-tag result-card__interaction-tag--more">
-          +{{ result.interactions.length - 4 }}
+        <span v-if="(result.interactions || []).length > 4" class="result-card__interaction-tag result-card__interaction-tag--more">
+          +{{ (result.interactions || []).length - 4 }}
         </span>
       </div>
     </div>

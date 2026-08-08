@@ -15,7 +15,7 @@ AI预测核心模块是 SynPharm 系统的**核心业务模块**，采用 **Spri
 | 模式         | 适用场景    | 特点                          |
 | :--------- | :------ | :-------------------------- |
 | **单条处理模式** | 前端实时交互  | 同步/短异步请求，毫秒级响应，即时反馈         |
-| **批量处理模式** | 海量CSV数据 | SpringBoot线程池异步调度，进度追踪，结果下载 |
+| **批量处理模式** | 海量CSV数据 | RabbitMQ 消息队列异步调度，进度追踪，结果下载 |
 
 **核心职责**：
 
@@ -26,7 +26,7 @@ AI预测核心模块是 SynPharm 系统的**核心业务模块**，采用 **Spri
 
 | 特性     | 说明                           | 技术实现                        | 设计目的           |
 | :----- | :--------------------------- | :-------------------------- | :------------- |
-| 双模运行   | 支持单条实时预测和批量CSV处理             | SpringBoot线程池 + FastAPI双接口  | 兼顾实时交互与海量数据处理  |
+| 双模运行   | 支持单条实时预测和批量CSV处理             | RabbitMQ消息队列 + FastAPI双接口  | 兼顾实时交互与海量数据处理  |
 | 微服务分离  | SpringBoot业务中台与FastAPI算法引擎解耦 | HTTP RESTful API通信          | 独立扩展，算法更新不影响业务 |
 | 任务管理   | 异步任务提交、状态追踪、进度查询             | `batch_task` 表 + 状态机        | 支持长时间批量任务管理    |
 | 结果存储   | 预测结果持久化存储，支持历史查询和下载          | MySQL + 文件存储                | 数据持久化，支持追溯分析   |
@@ -117,9 +117,9 @@ AI预测核心模块是 SynPharm 系统的**核心业务模块**，采用 **Spri
 │                                                                             │
 │  ┌──────────────────────────────────────────────────────────────────────┐   │
 │  │                      BatchUploadController                           │   │
-│  │  POST /api/batch/upload    → 解析CSV,生成batch_id,提交线程池         │   │
-│  │  GET  /api/batch/status    → 查询批量任务状态                         │   │
-│  │  GET  /api/batch/download  → 下载批量结果文件                        │   │
+│  │  POST /api/batch/upload    → 解析CSV,生成batch_id,投递MQ消息         │   │
+│  │  GET  /api/batch/status    → 查询批量任务状态（归属校验）             │   │
+│  │  GET  /api/batch/download  → 下载批量结果文件（归属校验）             │   │
 │  └──────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
 │  ┌──────────────────────────────────────────────────────────────────────┐   │
@@ -130,11 +130,10 @@ AI预测核心模块是 SynPharm 系统的**核心业务模块**，采用 **Spri
 │                                                                             │
 │  ┌──────────────────────────────────────────────────────────────────────┐   │
 │  │                        BatchProcessService                           │   │
-│  │  - submitBatchTask(batchId)    → 提交异步任务到线程池                 │   │
-│  │  - processBatch(batchId)       → 解析CSV,分片调用FastAPI             │   │
-│  │  - processChunk(chunk)         → 调用FastAPI /predict/batch          │   │
-│  │  - updateProgress(batchId,...) → 更新进度和结果                       │   │
-│  │  - finalizeBatch(batchId)      → 完成批量任务                         │   │
+│  │  - uploadBatch(file,algoType,userId) → 落库 + 投递MQ消息             │   │
+│  │  - processBatch(batchId,algoType)    → 解析CSV,分片调用FastAPI(幂等)  │   │
+│  │  - getBatchStatus(batchId,userId)    → 查询进度（归属校验）           │   │
+│  │  - downloadBatch(batchId,userId)     → 下载结果（归属校验）           │   │
 │  └──────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
 │  ┌──────────────────────────────────────────────────────────────────────┐   │
@@ -144,11 +143,11 @@ AI预测核心模块是 SynPharm 系统的**核心业务模块**，采用 **Spri
 │  └──────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
 │  ┌──────────────────────────────────────────────────────────────────────┐   │
-│  │                    Spring ThreadPoolTaskExecutor                     │   │
-│  │  - corePoolSize: 4                                                   │   │
-│  │  - maxPoolSize: 8                                                    │   │
-│  │  - queueCapacity: 100                                                │   │
-│  │  - rejectedExecutionHandler: CallerRunsPolicy                        │   │
+│  │                      RabbitMQ (mq 包)                                │   │
+│  │  - exchange: synpharm.exchange (direct, durable)                     │   │
+│  │  - queue: batch.task.queue + 死信 batch.task.dlq                     │   │
+│  │  - producer: BatchTaskProducer → 上传后投递消息                       │   │
+│  │  - consumer: BatchTaskConsumer → 手动 ack，失败进死信                 │   │
 │  └──────────────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────────┘
                                     │ HTTP POST (JSON)
@@ -215,7 +214,8 @@ AI预测核心模块是 SynPharm 系统的**核心业务模块**，采用 **Spri
 | `model/entity`      | 数据库实体              | `BatchTask`, `PredictionTask`                                                | `model/entity/`      |
 | `model/enums`       | 枚举定义               | `AlgoType`, `TaskStatus`                                                     | `model/enums/`       |
 | `client`            | FastAPI HTTP客户端    | `FastApiClient`                                                              | `client/`            |
-| `config`            | 配置类                | `AsyncConfig`, `FastApiConfig`                                               | `config/`            |
+| `config`            | 配置类                | `RabbitConfig`, `FastApiConfig`                                              | `config/`            |
+| `mq`                | 消息队列               | `RabbitConfig`, `BatchTaskMessage`, `BatchTaskProducer`, `BatchTaskConsumer`  | `mq/`               |
 
 ### 2.3 核心类关系图
 
@@ -258,20 +258,28 @@ classDiagram
 
     class BatchProcessService {
         <<interface>>
-        +submitBatchTask(String) void
-        +processBatch(String) void
-        +getBatchStatus(String) BatchTask
+        +uploadBatch(file, algoType, userId) BatchUploadResponse
+        +processBatch(batchId, algoType) void
+        +getBatchStatus(batchId, userId) BatchStatusResponse
+        +downloadBatch(batchId, userId) ResponseEntity~Resource~
     }
 
     class BatchProcessServiceImpl {
-        -Executor batchTaskExecutor
         -BatchTaskMapper batchTaskMapper
+        -BatchTaskProducer batchTaskProducer
         -FastApiClient fastApiClient
-        +submitBatchTask(String) void
-        +processBatch(String) void
-        +processChunk(String, List~BatchItem~) void
-        +updateProgress(String, int, int) void
-        +finalizeBatch(String) void
+        +uploadBatch(file, algoType, userId) BatchUploadResponse
+        +processBatch(batchId, algoType) void
+        +getBatchStatus(batchId, userId) BatchStatusResponse
+        +downloadBatch(batchId, userId) ResponseEntity~Resource~
+    }
+
+    class BatchTaskProducer {
+        +sendBatchTask(batchId, algoType) void
+    }
+
+    class BatchTaskConsumer {
+        +onMessage(message, channel, deliveryTag) void
     }
 
     class FastApiClient {
@@ -305,6 +313,8 @@ classDiagram
     PredictServiceImpl --> PredictionTaskMapper : uses
     BatchProcessServiceImpl --> FastApiClient : calls
     BatchProcessServiceImpl --> BatchTaskMapper : uses
+    BatchProcessServiceImpl --> BatchTaskProducer : sends
+    BatchTaskConsumer --> BatchProcessService : calls
 ```
 
 ### 2.4 核心通信机制
@@ -315,6 +325,7 @@ classDiagram
 | :------------------- | :--------------- | :--------------------------------------------- |
 | SpringBoot ↔ FastAPI | HTTP RESTful API | SpringBoot作为客户端，发送JSON数据；FastAPI作为服务端，返回JSON结果 |
 | SpringBoot ↔ MySQL   | JDBC/ORM         | SpringBoot是MySQL的唯一写入者，负责任务记录和结果持久化            |
+| SpringBoot ↔ RabbitMQ | AMQP           | 上传后投递批量任务消息，消费者异步执行，失败进死信队列            |
 | FastAPI ↔ MySQL      | **零通信**          | FastAPI是无状态纯计算引擎，只负责"接收参数→计算→返回结果"             |
 
 ### 2.5 交互流程图
@@ -324,24 +335,26 @@ flowchart TD
     User([前端/用户]) -->|1. 上传CSV文件| SpringBoot
 
     subgraph SpringBoot业务中台
-        SpringBoot -->|2. 解析文件,生成batch_id| MySQL[(MySQL数据库)]
+        SpringBoot -->|2. 解析文件,生成batch_id,落库| MySQL[(MySQL数据库)]
         MySQL -.->|3. 返回任务记录状态| SpringBoot
-        SpringBoot -->|4. 提交异步任务到线程池| ThreadPool[Spring线程池]
+        SpringBoot -->|4. 投递批量任务消息| MQ[(RabbitMQ<br/>batch.task.queue)]
     end
 
-    subgraph FastAPI算法黑箱
-        ThreadPool -->|5. HTTP POST /v1/predict/batch (JSON)| FastAPI
-        FastAPI -->|6. 加载论文推理文件执行GPU推理| GPU[GPU/CPU算力]
-        GPU -->|7. 返回计算指标| FastAPI
-        FastAPI -->|8. HTTP 200 OK (JSON结果)| ThreadPool
+    subgraph MQ消费者 + FastAPI算法黑箱
+        MQ -->|5. 消费者消费消息| Consumer[BatchTaskConsumer]
+        Consumer -->|6. HTTP POST /v1/predict/batch (JSON)| FastAPI
+        FastAPI -->|7. 加载论文推理文件执行GPU推理| GPU[GPU/CPU算力]
+        GPU -->|8. 返回计算指标| FastAPI
+        FastAPI -->|9. HTTP 200 OK (JSON结果)| Consumer
+        Consumer -->|10. basicAck 确认| MQ
     end
 
     subgraph 结果持久化
-        ThreadPool -->|9. 更新任务状态与结果| MySQL
-        User -->|10. 轮询获取进度| SpringBoot
-        SpringBoot -->|11. 查询最新状态| MySQL
-        MySQL -.->|12. 返回进度/结果| SpringBoot
-        SpringBoot -->|13. 返回进度JSON| User
+        Consumer -->|11. 更新任务状态与结果| MySQL
+        User -->|12. 轮询获取进度| SpringBoot
+        SpringBoot -->|13. 查询最新状态(归属校验)| MySQL
+        MySQL -.->|14. 返回进度/结果| SpringBoot
+        SpringBoot -->|15. 返回进度JSON| User
     end
 ```
 
@@ -362,10 +375,12 @@ flowchart TD
 | `fail_count`    | INT          | NOT NULL DEFAULT 0                                               | 失败条数        | 统计失败数                                      |
 | `progress`      | DECIMAL(5,2) | NOT NULL DEFAULT 0.00                                            | 当前进度        | 0.00-100.00，百分比                            |
 | `status`        | TINYINT      | NOT NULL DEFAULT 0                                               | 状态          | 0:PENDING, 1:PROCESSING, 2:SUCCESS, 3:FAIL |
+| `algo_type`     | VARCHAR(20)  | NOT NULL DEFAULT ''                                              | 算法类型        | DTI/PPI/DDI，持久化避免依赖 Redis          |
 | `result_url`    | VARCHAR(255) | -                                                                | 结果文件下载地址    | 处理完成后生成                                    |
 | `error_msg`     | TEXT         | -                                                                | 批次级错误信息     | 失败时记录                                      |
 | `create_time`   | DATETIME     | NOT NULL DEFAULT CURRENT\_TIMESTAMP                              | 创建时间        | 自动填充                                       |
 | `update_time`   | DATETIME     | NOT NULL DEFAULT CURRENT\_TIMESTAMP ON UPDATE CURRENT\_TIMESTAMP | 更新时间        | 自动更新                                       |
+| `deleted`       | TINYINT      | NOT NULL DEFAULT 0                                               | 逻辑删除        | MyBatis-Plus @TableLogic，查询自动过滤     |
 
 **索引设计**：
 
@@ -390,10 +405,12 @@ CREATE TABLE `batch_task` (
   `fail_count` INT NOT NULL DEFAULT 0 COMMENT '失败条数',
   `progress` DECIMAL(5,2) NOT NULL DEFAULT 0.00 COMMENT '当前进度 (0.00-100.00)',
   `status` TINYINT NOT NULL DEFAULT 0 COMMENT '0:PENDING, 1:PROCESSING, 2:SUCCESS, 3:FAIL',
+  `algo_type` VARCHAR(20) NOT NULL DEFAULT '' COMMENT '算法类型 DTI/PPI/DDI',
   `result_url` VARCHAR(255) DEFAULT NULL COMMENT '结果文件下载地址',
   `error_msg` TEXT DEFAULT NULL COMMENT '批次级错误信息',
   `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` TINYINT NOT NULL DEFAULT 0 COMMENT '逻辑删除：0未删除 1已删除',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_batch_id` (`batch_id`),
   KEY `idx_user_id` (`user_id`),
@@ -401,6 +418,8 @@ CREATE TABLE `batch_task` (
   KEY `idx_create_time` (`create_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='批次任务表';
 ```
+
+> 迁移脚本：`synpharm-backend/sql/08_batch_task_alter.sql`（v3.1.0，幂等补列，重复执行报错可忽略）
 
 ### 3.2 单条预测历史表 (prediction\_task)
 
@@ -797,52 +816,54 @@ sequenceDiagram
 sequenceDiagram
     participant User as 前端
     participant SB as SpringBoot
+    participant Producer as BatchTaskProducer
+    participant MQ as RabbitMQ
+    participant Consumer as BatchTaskConsumer
     participant DB as MySQL
-    participant TP as Spring线程池
     participant FA as FastAPI (论文推理文件)
     participant GPU as GPU/CPU
 
-    User->>SB: POST /api/batch/upload (CSV File)
+    User->>SB: POST /api/batch/upload (CSV File, algoType)
     activate SB
     
-    SB->>DB: INSERT batch_task (Status=PENDING)
+    SB->>DB: INSERT batch_task (Status=PENDING 0, algoType)
     DB-->>SB: 返回任务ID
+    SB->>Producer: sendBatchTask(batchId, algoType)
+    Producer->>MQ: 投递消息到 batch.task.queue
     
-    SB-->>User: Return batch_id (HTTP 202 Accepted)
+    SB-->>User: Return batch_id (HTTP 200 OK)
     deactivate SB
 
-    SB->>TP: Submit BatchProcessTask(batch_id)
-
-    activate TP
-    TP->>DB: SELECT batch_task WHERE batch_id=xxx
-    TP->>DB: UPDATE batch_task SET Status=PROCESSING
+    MQ->>Consumer: 消费消息
+    Consumer->>DB: SELECT batch_task WHERE batch_id=xxx
+    Consumer->>DB: UPDATE batch_task SET Status=PROCESSING (幂等：0/1跳过)
     
-    TP->>TP: Parse CSV & Split Chunks (每50条一个分片)
+    Consumer->>Consumer: Parse CSV & Split Chunks (每50条一个分片)
 
     loop 遍历每个数据分片
-        TP->>FA: POST /v1/predict/batch (JSON List)
+        Consumer->>FA: POST /v1/predict/batch (JSON List)
         activate FA
         FA->>GPU: Batch Inference
         GPU-->>FA: Return Metrics List
-        FA-->>TP: Return Results List
+        FA-->>Consumer: Return Results List
         deactivate FA
 
-        TP->>DB: UPDATE batch_task (Progress++, Append Results)
+        Consumer->>DB: UPDATE batch_task (Progress++, success_count)
     end
 
-    TP->>DB: UPDATE batch_task (Status=SUCCESS, ResultURL=...)
-    TP->>TP: 生成结果文件 (CSV/Excel)
-    deactivate TP
+    Consumer->>DB: UPDATE batch_task (Status=SUCCESS, ResultURL=...)
+    Consumer->>Consumer: 生成结果文件 (CSV/Excel)
+    Consumer->>MQ: basicAck（失败 basicNack 进死信）
 
-    loop 前端轮询 (每3秒)
+    loop 前端轮询 (每2秒)
         User->>SB: GET /api/batch/status/{batch_id}
-        SB->>DB: SELECT progress, status
+        SB->>DB: SELECT progress, status（归属校验）
         DB-->>SB: 返回最新状态
         SB-->>User: Return {progress: 86%, status: "PROCESSING"}
     end
 
     User->>SB: GET /api/batch/download/{batch_id}
-    SB-->>User: Return Result CSV/Excel
+    SB-->>User: Return Result CSV/Excel（归属校验）
 ```
 
 ***
@@ -968,23 +989,38 @@ class DTIService:
 
 ## 7. SpringBoot 端实现
 
-### 7.1 异步线程池配置
+### 7.1 RabbitMQ 消息队列配置
 
 ```java
 @Configuration
-@EnableAsync
-public class AsyncConfig {
-    
-    @Bean("batchTaskExecutor")
-    public Executor batchTaskExecutor() {
-        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(4);
-        executor.setMaxPoolSize(8);
-        executor.setQueueCapacity(100);
-        executor.setThreadNamePrefix("batch-predict-");
-        executor.setRejectedExecutionHandler(new CallerRunsPolicy());
-        executor.initialize();
-        return executor;
+@EnableRabbit
+public class RabbitConfig {
+
+    public static final String EXCHANGE = "synpharm.exchange";
+    public static final String QUEUE = "batch.task.queue";
+    public static final String DLQ = "batch.task.dlq";
+
+    @Bean
+    public DirectExchange synpharmExchange() {
+        return new DirectExchange(EXCHANGE, true, false); // durable
+    }
+
+    @Bean
+    public Queue batchTaskQueue() {
+        return QueueBuilder.durable(QUEUE)
+                .deadLetterExchange("")
+                .deadLetterRoutingKey(DLQ)
+                .build();
+    }
+
+    @Bean
+    public Queue batchTaskDlq() {
+        return QueueBuilder.durable(DLQ).build();
+    }
+
+    @Bean
+    public Binding binding(Queue batchTaskQueue, DirectExchange synpharmExchange) {
+        return BindingBuilder.bind(batchTaskQueue).to(synpharmExchange).with(QUEUE);
     }
 }
 ```
@@ -1023,64 +1059,53 @@ public class FastApiClient {
 }
 ```
 
-### 7.3 批量处理服务
+### 7.3 批量处理服务（生产者 + 消费者）
 
 ```java
-@Service
-public class BatchProcessServiceImpl implements BatchProcessService {
-    
-    @Autowired
-    @Qualifier("batchTaskExecutor")
-    private Executor batchTaskExecutor;
-    
-    @Autowired
-    private BatchTaskMapper batchTaskMapper;
-    
-    @Autowired
-    private FastApiClient fastApiClient;
-    
-    @Override
-    public void submitBatchTask(String batchId) {
-        batchTaskExecutor.execute(() -> processBatch(batchId));
+// ===== 生产者：上传后投递消息 =====
+@Component
+public class BatchTaskProducer {
+    @Autowired private RabbitTemplate rabbitTemplate;
+
+    public void sendBatchTask(String batchId, String algoType) {
+        rabbitTemplate.convertAndSend(
+            RabbitConfig.EXCHANGE, RabbitConfig.QUEUE,
+            new BatchTaskMessage(batchId, algoType));
     }
-    
-    @Override
-    public void processBatch(String batchId) {
-        BatchTask task = batchTaskMapper.selectByBatchId(batchId);
-        task.setStatus(1); // PROCESSING
-        batchTaskMapper.updateById(task);
-        
-        List<BatchItem> chunk = new ArrayList<>();
-        try (ExcelReader reader = EasyExcel.read(task.getFilePath()).build()) {
-            reader.read(new SyncReadListener() {
-                @Override
-                public void invoke(Object data, AnalysisContext context) {
-                    chunk.add(convertToBatchItem(data));
-                    if (chunk.size() >= 50) {
-                        processChunk(batchId, chunk);
-                        chunk.clear();
-                    }
-                }
-                
-                @Override
-                public void doAfterAllAnalysed(AnalysisContext context) {
-                    if (!chunk.isEmpty()) processChunk(batchId, chunk);
-                }
-            });
-        }
-        finalizeBatch(batchId);
-    }
-    
-    private void processChunk(String batchId, List<BatchItem> chunk) {
+}
+
+// ===== 消费者：异步执行 + 手动 ack =====
+@Component
+public class BatchTaskConsumer {
+    @Autowired private BatchProcessService batchProcessService;
+
+    @RabbitListener(queues = RabbitConfig.QUEUE, ackMode = "MANUAL")
+    public void onMessage(BatchTaskMessage msg, Channel channel,
+                          @Header(AmqpHeaders.DELIVERY_TAG) long tag) throws Exception {
         try {
-            BatchPredictionResponse resp = fastApiClient.predictBatch(chunk);
-            resultRepo.saveAll(resp.getResults());
-            updateProgress(batchId, chunk.size(), 0);
+            batchProcessService.processBatch(msg.getBatchId(), msg.getAlgoType());
+            channel.basicAck(tag, false);
         } catch (Exception e) {
-            updateProgress(batchId, 0, chunk.size());
-            log.error("Batch chunk failed for batchId: {}", batchId, e);
+            channel.basicNack(tag, false, false); // 进死信
         }
     }
+}
+
+// ===== 业务：DB 为权威 + 幂等 =====
+@Override
+public void processBatch(String batchId, String algoType) {
+    BatchTask task = batchTaskMapper.selectByBatchId(batchId);
+    if (task == null) return;
+    if (task.getStatus() == 1 || task.getStatus() == 2) return; // 幂等跳过
+    
+    task.setStatus(1); // PROCESSING
+    batchTaskMapper.updateById(task);
+    
+    // 分片（50/片）调用 PipelineFactory.batchProcess / FastApiClient.predictBatch
+    // 每 5 片批量更新进度 + success_count
+    
+    task.setStatus(2); // SUCCESS + resultUrl
+    batchTaskMapper.updateById(task);
 }
 ```
 
@@ -1106,7 +1131,9 @@ PENDING (0) ──▶ PROCESSING (1) ──▶ SUCCESS (2)
 
 ### 8.2 故障补偿机制
 
-由于未使用MQ，若SpringBoot节点意外重启，内存中排队的任务会丢失。需实现定时任务：
+已使用 RabbitMQ：消息**持久化**，节点重启不丢失；消费失败进入**死信队列**（`batch.task.dlq`）便于人工/脚本排查重投；消费侧**幂等**（status 0/1 跳过）防止重复投递重复处理。
+
+（可选增强）定时扫描长期 `PROCESSING` 的任务重新投递：
 
 ```java
 @Scheduled(fixedRate = 300000)
@@ -1115,7 +1142,7 @@ public void recoverLostTasks() {
     for (BatchTask task : lostTasks) {
         task.setStatus(0); // 重置为PENDING
         batchTaskMapper.updateById(task);
-        submitBatchTask(task.getBatchId());
+        batchTaskProducer.sendBatchTask(task.getBatchId(), task.getAlgoType()); // 重新投递
     }
 }
 ```

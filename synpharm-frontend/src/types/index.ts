@@ -8,6 +8,14 @@ export interface Target {
   geneName?: string
   organism?: string
   pdbIds?: string[]
+  // ===== 精细化分类（面向专业用户） =====
+  chineseName?: string     // 中文名
+  targetType?: string      // 靶点类型（如 受体酪氨酸激酶 / 离子通道）
+  family?: string          // 蛋白家族
+  pathway?: string         // 主要通路
+  diseaseArea?: string     // 疾病领域（肿瘤 / 感染 / 代谢 / 神经 / 心血管）
+  relatedDiseases?: string // 相关疾病
+  knownDrugs?: string      // 相关药物/干预方式
 }
 
 export interface InputData {

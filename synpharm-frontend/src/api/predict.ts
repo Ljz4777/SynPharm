@@ -1,4 +1,4 @@
-import { request } from '@/utils/request'
+import { request, baseURL } from '@/utils/request'
 import type { PredictionResult, Task } from '@/types'
 
 export interface DTIPredictRequest {
@@ -86,5 +86,59 @@ export const resultApi = {
 
   deleteResult(id: string | number): Promise<void> {
     return request.delete<void>(`/api/results/${id}`)
+  }
+}
+
+export interface BatchUploadResult {
+  batchId: string
+  totalCount: number
+  status: string
+}
+
+export interface BatchStatus {
+  batchId: string
+  algoType?: string
+  totalCount: number
+  successCount: number
+  failCount: number
+  progress: number
+  status: string
+  resultUrl?: string
+  createTime?: string
+  updateTime?: string
+}
+
+export const batchApi = {
+  /** 上传 CSV 批量预测 */
+  upload(file: File, algoType: string): Promise<BatchUploadResult> {
+    const form = new FormData()
+    form.append('file', file)
+    form.append('algoType', algoType)
+    return request.post<BatchUploadResult>('/api/batch/upload', form, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+  },
+
+  /** 查询批量任务进度 */
+  getStatus(batchId: string): Promise<BatchStatus> {
+    return request.get<BatchStatus>(`/api/batch/status/${batchId}`)
+  },
+
+  /** 下载批量结果 CSV（带 token，绕过拦截器） */
+  async download(batchId: string): Promise<void> {
+    const token = localStorage.getItem('auth_token')
+    const url = `${baseURL}/api/batch/download/${batchId}`
+    const resp = await fetch(url, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {}
+    })
+    if (!resp.ok) {
+      throw new Error('下载失败')
+    }
+    const blob = await resp.blob()
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.download = `${batchId}_result.csv`
+    link.click()
+    URL.revokeObjectURL(link.href)
   }
 }

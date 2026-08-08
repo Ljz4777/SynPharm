@@ -16,6 +16,12 @@ spring:
       database: 0
       timeout: 3000ms
 
+  rabbitmq:
+    host: ${RABBITMQ_HOST:rabbitmq}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:synpharm}
+    password: ${RABBITMQ_PASSWORD:}
+
   mail:
     host: smtp.qq.com
     port: 465

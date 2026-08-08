@@ -9,11 +9,9 @@ public interface BatchProcessService {
 
     BatchUploadResponse uploadBatch(MultipartFile file, String algoType, Long userId);
 
-    void submitBatchTask(String batchId, String algoType);
-
     void processBatch(String batchId, String algoType);
 
-    BatchStatusResponse getBatchStatus(String batchId);
+    BatchStatusResponse getBatchStatus(String batchId, Long userId);
 
-    ResponseEntity<org.springframework.core.io.Resource> downloadBatch(String batchId);
+    ResponseEntity<org.springframework.core.io.Resource> downloadBatch(String batchId, Long userId);
 }

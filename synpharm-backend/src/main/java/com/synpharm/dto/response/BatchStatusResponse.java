@@ -11,6 +11,7 @@ import java.time.LocalDateTime;
 public class BatchStatusResponse {
 
     private String batchId;
+    private String algoType;
     private Integer totalCount;
     private Integer successCount;
     private Integer failCount;

@@ -4,7 +4,7 @@ import router from '@/router'
 
 const envBase = (import.meta.env.VITE_API_BASE_URL as string || '').replace(/\/+$/, '')
 // 生产（Docker/nginx 同源反代）走相对路径；本地开发默认直连后端（跨域由 CORS 放开）
-const baseURL = envBase || (import.meta.env.PROD ? '' : 'http://localhost:8080')
+export const baseURL = envBase || (import.meta.env.PROD ? '' : 'http://localhost:8080')
 
 const service: AxiosInstance = axios.create({
   baseURL,

@@ -38,7 +38,7 @@ SynPharm AI预测核心模块是一个基于微服务架构的药物相互作用
 | 模式 | 适用场景 | 特点 |
 | :--- | :--- | :--- |
 | **单条处理模式** | 前端实时交互 | 同步请求，毫秒级响应，即时反馈 |
-| **批量处理模式** | 海量CSV数据 | SpringBoot线程池异步调度，进度追踪，结果下载 |
+| **批量处理模式** | 海量CSV数据 | RabbitMQ 消息队列异步调度，进度追踪，结果下载 |
 
 ---
 
@@ -93,13 +93,13 @@ SynPharm AI预测核心模块是一个基于微服务架构的药物相互作用
 │           ▼                      ▼                          ▼              │
 │  ┌──────────────────┐   ┌──────────────────┐   ┌────────────────────────┐   │
 │  │AuthServiceImpl   │   │PredictServiceImpl│   │BatchProcessServiceImpl │   │
-│  │ 策略模式认证     │   │ 调用管道工厂      │   │ Redis进度+异步调度     │   │
+│  │ 策略模式认证     │   │ 调用管道工厂      │   │ DB权威+RabbitMQ异步     │   │
 │  └────────┬─────────┘   └────────┬─────────┘   └────────────┬───────────┘   │
 │           │                      │                          │              │
 │           ▼                      ▼                          ▼              │
 │  ┌──────────────────┐   ┌──────────────────┐   ┌────────────────────────┐   │
-│  │  JwtUtils        │   │  FastApiClient   │   │  ThreadPool            │   │
-│  │  Token生成验证    │   │  HTTP客户端      │   │  异步任务执行器         │   │
+│  │  JwtUtils        │   │  FastApiClient   │   │  RabbitMQ (mq 包)      │   │
+│  │  Token生成验证    │   │  HTTP客户端      │   │  生产者/消费者/死信      │   │
 │  └────────┬─────────┘   └────────┬─────────┘   └────────────────────────┘   │
 │           │                      │                                         │
 └───────────┼──────────────────────┼─────────────────────────────────────────┘
@@ -144,7 +144,7 @@ SynPharm AI预测核心模块是一个基于微服务架构的药物相互作用
 | **微服务分离** | SpringBoot业务逻辑与FastAPI算法计算分离，支持独立部署 |
 | **管道机制** | SpringBoot端采用策略模式，将输入解析、算法执行、输出格式化解耦为独立策略 |
 | **无状态设计** | FastAPI为无状态计算节点，支持水平扩展，只负责纯粹的算法运算 |
-| **异步处理** | 批量任务采用线程池异步执行，不阻塞主线程，进度存储于Redis |
+| **异步处理** | 批量任务采用 RabbitMQ 消息队列异步执行，不阻塞主线程；状态以 DB 为权威，Redis 仅作进度缓存 |
 | **双模运行** | 支持单条实时预测和批量异步预测两种模式 |
 | **策略模式** | 通过PipelineFactory动态组合三个维度的策略，避免类爆炸 |
 
@@ -402,8 +402,9 @@ sequenceDiagram
     participant Client as 前端
     participant Controller as BatchUploadController
     participant Service as BatchProcessServiceImpl
-    participant Mapper as BatchTaskMapper
-    participant Executor as ThreadPool
+    participant Producer as BatchTaskProducer
+    participant MQ as RabbitMQ
+    participant Consumer as BatchTaskConsumer
     participant ClientHttp as FastApiClient
     participant FA as FastAPI
     participant DB as MySQL
@@ -413,24 +414,27 @@ sequenceDiagram
     
     Service->>Service: 保存文件，生成batch_id
     Service->>Mapper: insert(batchTask)
-    Mapper->>DB: INSERT INTO batch_task (PENDING)
+    Mapper->>DB: INSERT INTO batch_task (status=0 PENDING)
     
-    Service->>Executor: submitBatchTask(batchId)
+    Service->>Producer: sendBatchTask(batchId, algoType)
+    Producer->>MQ: 投递消息
     Service-->>Controller: 返回batchId
     Controller-->>Client: 200 OK
     
-    Executor->>Executor: processBatch(batchId)
-    Executor->>Mapper: update status=PROCESSING
+    MQ->>Consumer: 消费消息
+    Consumer->>Service: processBatch(batchId, algoType)
+    Service->>Mapper: update status=1 PROCESSING（幂等：0/1跳过）
     
     loop 解析CSV分片 (每50条)
-        Executor->>ClientHttp: predictBatch(chunk)
+        Service->>ClientHttp: predictBatch(chunk)
         ClientHttp->>FA: POST /v1/predict/batch
         FA-->>ClientHttp: 返回结果列表
-        Executor->>Mapper: updateProgress()
+        Service->>Mapper: updateProgress()
     end
     
-    Executor->>Service: 生成结果文件
-    Executor->>Mapper: update status=SUCCESS, resultUrl=...
+    Service->>Service: 生成结果文件
+    Service->>Mapper: update status=2 SUCCESS, resultUrl=...
+    Consumer->>MQ: basicAck（失败则 basicNack 进死信）
 ```
 
 ### 7.3 用户登录流程

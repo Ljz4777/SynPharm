@@ -60,6 +60,30 @@ services:
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
+  # RabbitMQ 3.13（消息队列：批量任务异步调度）
+  # ---------------------------------------------------------------------------
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: synpharm-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-synpharm}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?请在 .env 中设置 RABBITMQ_PASSWORD}
+    ports:
+      # 管理台仅限内网/本机访问，生产不暴露公网
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - synpharm
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
   # SpringBoot 后端（业务 API）
   # ---------------------------------------------------------------------------
   backend:
@@ -79,6 +103,11 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      # RabbitMQ（批量任务消息队列）
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER:-synpharm}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?请在 .env 中设置 RABBITMQ_PASSWORD}
       # JWT
       JWT_SECRET: ${JWT_SECRET:?请在 .env 中设置 JWT_SECRET}
       JWT_EXPIRATION: ${JWT_EXPIRATION:-86400000}
@@ -97,6 +126,8 @@ services:
       mysql:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
     volumes:
       - backend_uploads:/app/uploads
@@ -171,6 +202,7 @@ networks:
 volumes:
   mysql_data:
   redis_data:
+  rabbitmq_data:
   backend_uploads:
   backend_results:
   fastapi_logs:

@@ -154,7 +154,7 @@ synpharm-backend/
 │   │       └── ApiResponse.java
 │   ├── config/                    # 配置类
 │   │   ├── WebClientConfig.java
-│   │   ├── AsyncConfig.java
+│   │   ├── RabbitConfig.java
 │   │   └── SecurityConfig.java
 │   ├── mq/                        # 消息队列（RabbitMQ）
 │   │   ├── RabbitConfig.java          # Exchange/Queue/绑定/死信配置
@@ -971,7 +971,6 @@ public class BatchProcessServiceImpl implements BatchProcessService {
     }
 
     @Override
-    @Async
     public void processBatch(String batchId, String algoType) {
         log.info("开始处理批量任务: {}", batchId);
 
@@ -1263,25 +1262,39 @@ public class CsvUtils {
 }
 ```
 
-### 5.8 异步配置
+### 5.8 消息队列配置（RabbitMQ）
 
-**AsyncConfig.java**
+**RabbitConfig.java**（`mq/` 包）
 
 ```java
 @Configuration
-@EnableAsync
-public class AsyncConfig {
+@EnableRabbit
+public class RabbitConfig {
+    public static final String EXCHANGE = "synpharm.exchange";
+    public static final String QUEUE = "batch.task.queue";
+    public static final String DLQ = "batch.task.dlq";
 
-    @Bean(name = "batchTaskExecutor")
-    public Executor batchTaskExecutor() {
-        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(2);
-        executor.setMaxPoolSize(5);
-        executor.setQueueCapacity(100);
-        executor.setThreadNamePrefix("batch-");
-        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
-        executor.initialize();
-        return executor;
+    @Bean
+    public DirectExchange synpharmExchange() {
+        return new DirectExchange(EXCHANGE, true, false); // durable
+    }
+
+    @Bean
+    public Queue batchTaskQueue() {
+        return QueueBuilder.durable(QUEUE)
+                .deadLetterExchange("")
+                .deadLetterRoutingKey(DLQ)
+                .build();
+    }
+
+    @Bean
+    public Queue batchTaskDlq() {
+        return QueueBuilder.durable(DLQ).build();
+    }
+
+    @Bean
+    public Binding binding(Queue batchTaskQueue, DirectExchange synpharmExchange) {
+        return BindingBuilder.bind(batchTaskQueue).to(synpharmExchange).with(QUEUE);
     }
 }
 ```

@@ -1,63 +1,66 @@
 <template>
-  <aside class="sidebar">
-    <div class="sidebar__brand">
-      <div class="sidebar__logo">
-        <span class="sidebar__logo-icon">🧬</span>
-        <span class="sidebar__logo-text">SynPharm</span>
-      </div>
+  <header class="topbar">
+    <div class="topbar__brand" @click="router.push('/dashboard')">
+      <span class="topbar__logo">🧬</span>
+      <span class="topbar__name">SynPharm</span>
     </div>
-    
-    <nav class="sidebar__nav">
-      <router-link 
-        v-for="item in navItems" 
-        :key="item.path"
-        :to="item.path"
-        class="sidebar__nav-item"
-        :class="{ 'sidebar__nav-item--active': $route.path === item.path }"
+
+    <div class="topbar__nav">
+      <el-select
+        class="topbar__select"
+        :model-value="currentPath"
+        placeholder="选择栏目"
+        @change="navigateTo"
       >
-        <span class="sidebar__nav-icon">{{ item.icon }}</span>
-        <span class="sidebar__nav-text">{{ item.label }}</span>
-        <span v-if="item.badge" class="sidebar__nav-badge">{{ item.badge }}</span>
-      </router-link>
-    </nav>
-    
-    <div class="sidebar__user">
-      <div class="sidebar__user-avatar">
-        <span class="sidebar__user-avatar-text">{{ avatarText }}</span>
-      </div>
-      <div class="sidebar__user-info">
-        <span class="sidebar__user-name">{{ authStore.userNickname }}</span>
-        <span class="sidebar__user-role">{{ authStore.isGuest ? '游客' : '用户' }}</span>
-      </div>
-      <button class="sidebar__logout-btn" @click="handleLogout">
-        <span>退出</span>
-      </button>
+        <el-option
+          v-for="item in navItems"
+          :key="item.path"
+          :value="item.path"
+          :label="item.icon + ' ' + item.label"
+        />
+      </el-select>
     </div>
-  </aside>
+
+    <div class="topbar__user">
+      <span class="topbar__avatar">{{ avatarText }}</span>
+      <div class="topbar__user-info">
+        <span class="topbar__name-text">{{ authStore.userNickname }}</span>
+        <span class="topbar__role">{{ authStore.isGuest ? '游客' : '用户' }}</span>
+      </div>
+      <button class="topbar__logout" @click="handleLogout">退出</button>
+    </div>
+  </header>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { useRouter } from 'vue-router'
 
 const authStore = useAuthStore()
 const router = useRouter()
+const route = useRoute()
 
 const navItems = [
   { path: '/dashboard', label: '仪表盘', icon: '📊' },
   { path: '/predict', label: '预测中心', icon: '🎯' },
   { path: '/results', label: '预测结果', icon: '📈' },
-  { path: '/tasks', label: '任务管理', icon: '📋', badge: '2' },
+  { path: '/tasks', label: '任务管理', icon: '📋' },
   { path: '/targets', label: '靶点库', icon: '🧪' },
-  { path: '/visualization', label: '3D可视化', icon: '3D' },
+  { path: '/visualization', label: '3D可视化', icon: '🧫' },
   { path: '/profile', label: '个人中心', icon: '👤' }
 ]
+
+const currentPath = computed(() => route.path)
 
 const avatarText = computed(() => {
   if (!authStore.userNickname) return '👤'
   return authStore.userNickname.charAt(0).toUpperCase()
 })
+
+const navigateTo = (path: string) => {
+  router.push(path)
+}
 
 const handleLogout = () => {
   authStore.logout()
@@ -66,141 +69,91 @@ const handleLogout = () => {
 </script>
 
 <style lang="scss" scoped>
-.sidebar {
-  width: $sidebar-width;
-  background: $bg-sidebar;
-  color: #ffffff;
-  display: flex;
-  flex-direction: column;
-  height: 100%;
+.topbar {
   position: fixed;
-  left: 0;
   top: 0;
+  left: 0;
+  right: 0;
+  height: $header-height;
+  background: $bg-sidebar;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  padding: 0 $spacing-lg;
+  gap: $spacing-xl;
   z-index: $z-sticky;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
 }
 
-.sidebar__brand {
-  padding: $spacing-lg;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.sidebar__logo {
+.topbar__brand {
   display: flex;
   align-items: center;
-  gap: $spacing-md;
+  gap: $spacing-sm;
+  cursor: pointer;
 }
 
-.sidebar__logo-icon {
-  font-size: 22px;
-}
+.topbar__logo { font-size: 20px; }
+.topbar__name { font-size: $font-size-lg; font-weight: 600; }
 
-.sidebar__logo-text {
-  font-size: $font-size-lg;
-  font-weight: 600;
-  letter-spacing: 0.3px;
-}
-
-.sidebar__nav {
+.topbar__nav {
   flex: 1;
-  padding: $spacing-md;
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: center;
 }
 
-.sidebar__nav-item {
+.topbar__select {
+  width: 240px;
+  :deep(.el-select__wrapper) {
+    background: rgba(255, 255, 255, 0.1);
+    box-shadow: none;
+    border-radius: $border-radius-md;
+  }
+  :deep(.el-select__placeholder),
+  :deep(.el-select__selected-item) {
+    color: #fff;
+    font-size: $font-size-sm;
+  }
+  :deep(.el-select__caret) { color: rgba(255, 255, 255, 0.7); }
+}
+
+.topbar__user {
   display: flex;
   align-items: center;
   gap: $spacing-md;
-  padding: $spacing-sm $spacing-md;
-  border-radius: $border-radius-md;
-  color: rgba(255, 255, 255, 0.65);
-  text-decoration: none;
-  transition: all $transition-fast;
-  
-  &:hover {
-    background: $bg-sidebar-hover;
-    color: #ffffff;
-  }
-  
-  &--active {
-    background: rgba(59, 130, 246, 0.15);
-    color: $accent-light;
-  }
 }
 
-.sidebar__nav-icon {
-  font-size: $font-size-base;
-}
-
-.sidebar__nav-text {
-  flex: 1;
-  font-size: $font-size-sm;
-  font-weight: 400;
-}
-
-.sidebar__nav-badge {
-  background: $error-color;
-  color: #ffffff;
-  font-size: $font-size-xs;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 100px;
-}
-
-.sidebar__user {
-  padding: $spacing-md;
-  display: flex;
-  align-items: center;
-  gap: $spacing-md;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(0, 0, 0, 0.1);
-}
-
-.sidebar__user-avatar {
-  width: 36px;
-  height: 36px;
+.topbar__avatar {
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
-  background: rgba(59, 130, 246, 0.2);
+  background: rgba(59, 130, 246, 0.35);
   display: flex;
   align-items: center;
   justify-content: center;
+  font-size: $font-size-sm;
+  font-weight: 600;
 }
 
-.sidebar__user-avatar-text {
-  font-size: $font-size-base;
-  font-weight: 500;
-}
-
-.sidebar__user-info {
-  flex: 1;
+.topbar__user-info {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 
-.sidebar__user-name {
-  font-size: $font-size-sm;
-  font-weight: 500;
-}
+.topbar__name-text { font-size: $font-size-sm; font-weight: 500; }
+.topbar__role { font-size: $font-size-xs; color: rgba(255, 255, 255, 0.45); }
 
-.sidebar__user-role {
-  font-size: $font-size-xs;
-  color: rgba(255, 255, 255, 0.45);
-}
-
-.sidebar__logout-btn {
+.topbar__logout {
   background: transparent;
   border: none;
-  color: rgba(255, 255, 255, 0.45);
+  color: rgba(255, 255, 255, 0.6);
   font-size: $font-size-xs;
   cursor: pointer;
   padding: $spacing-xs $spacing-sm;
   border-radius: $border-radius-sm;
-  transition: all $transition-fast;
-  
+  transition: $transition-fast;
   &:hover {
-    background: rgba(239, 68, 68, 0.1);
+    background: rgba(239, 68, 68, 0.12);
     color: $error-color;
   }
 }

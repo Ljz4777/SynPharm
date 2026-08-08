@@ -1,56 +1,53 @@
 <template>
-  <div class="results">
+  <div class="rs">
     <Sidebar />
-    <main class="results__content">
-      <header class="results__header">
+    <main class="rs__main">
+      <header class="rs__header">
         <div>
-          <h1 class="results__title">预测结果</h1>
-          <p class="results__subtitle">管理和查看所有预测结果</p>
+          <h1 class="rs__title">预测结果</h1>
+          <p class="rs__subtitle">管理和查看所有预测结果</p>
         </div>
+        <span class="rs__count">{{ filteredResults.length }} 条结果</span>
       </header>
-      
-      <section class="results__filters">
-        <div class="results__search">
-          <input 
-            v-model="filters.search" 
-            type="text" 
-            class="results__search-input"
-            placeholder="搜索靶点名称、ID..."
-          />
-        </div>
-        <div class="results__filter-group">
-          <select v-model="filters.confidence" class="results__select">
-            <option value="all">所有置信度</option>
-            <option value="high">高</option>
-            <option value="medium">中</option>
-            <option value="low">低</option>
-          </select>
-          <select v-model="filters.sortBy" class="results__select">
-            <option value="date">按日期</option>
-            <option value="affinity">按亲和力</option>
-            <option value="confidence">按置信度</option>
-          </select>
-        </div>
+
+      <section class="rs__filters">
+        <input
+          v-model="filters.search"
+          type="text"
+          class="rs__search"
+          placeholder="搜索靶点名称、ID..."
+        />
+        <select v-model="filters.confidence" class="rs__select">
+          <option value="all">所有置信度</option>
+          <option value="high">高</option>
+          <option value="medium">中</option>
+          <option value="low">低</option>
+        </select>
+        <select v-model="filters.sortBy" class="rs__select">
+          <option value="date">按日期</option>
+          <option value="affinity">按亲和力</option>
+          <option value="confidence">按置信度</option>
+        </select>
       </section>
-      
-      <section class="results__list">
-        <div v-if="loading" class="results__loading">加载中...</div>
-        <div v-else-if="loadError" class="results__error">{{ loadError }}</div>
+
+      <section class="rs__list">
+        <div v-if="loading" class="rs__state">加载中...</div>
+        <div v-else-if="loadError" class="rs__state rs__state--error">{{ loadError }}</div>
         <template v-else>
-          <div class="results__grid">
-            <ResultCard 
-              v-for="result in filteredResults" 
+          <div class="rs__grid">
+            <ResultCard
+              v-for="result in filteredResults"
               :key="String(result.id)"
               :result="result"
               @detail="handleResultDetail"
               @3d="handleResult3D"
             />
           </div>
-          
-          <div v-if="filteredResults.length === 0" class="results__empty">
-            <span class="results__empty-icon">📭</span>
-            <span class="results__empty-text">暂无预测结果</span>
-            <router-link to="/predict" class="results__empty-link">开始预测</router-link>
+
+          <div v-if="filteredResults.length === 0" class="rs__empty">
+            <span class="rs__empty-icon">📭</span>
+            <span class="rs__empty-text">暂无预测结果</span>
+            <router-link to="/predict" class="rs__empty-link">开始预测</router-link>
           </div>
         </template>
       </section>
@@ -135,11 +132,11 @@ const handleResult3D = (result: PredictionResult) => {
   display: flex;
   min-height: 100vh;
   background: $bg-secondary;
+  padding-top: $header-height;
 }
 
 .results__content {
   flex: 1;
-  margin-left: $sidebar-width;
   padding: $spacing-lg;
 }
 
@@ -249,5 +246,111 @@ const handleResult3D = (result: PredictionResult) => {
   &:hover {
     background: $primary-dark;
   }
+}
+</style>
+
+<style lang="scss" scoped>
+/* ===================== 预测结果（新风格） ===================== */
+.rs {
+  display: flex;
+  min-height: 100vh;
+  background: $bg-secondary;
+  padding-top: $header-height;
+}
+
+.rs__main {
+  flex: 1;
+  padding: $spacing-xl;
+  max-width: 1100px;
+}
+
+.rs__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: $spacing-lg;
+}
+
+.rs__title {
+  font-size: $font-size-2xl;
+  font-weight: 700;
+  color: $text-primary;
+}
+
+.rs__subtitle {
+  margin-top: $spacing-xs;
+  font-size: $font-size-sm;
+  color: $text-muted;
+}
+
+.rs__count {
+  font-size: $font-size-sm;
+  color: $text-secondary;
+  background: $bg-tertiary;
+  padding: $spacing-xs $spacing-md;
+  border-radius: 999px;
+}
+
+.rs__filters {
+  display: flex;
+  gap: $spacing-md;
+  margin-bottom: $spacing-lg;
+}
+
+.rs__search {
+  flex: 1;
+  padding: $spacing-sm $spacing-md;
+  border: 1px solid $border-color;
+  border-radius: $border-radius-md;
+  font-size: $font-size-base;
+  background: $bg-primary;
+  &:focus { outline: none; border-color: $accent-color; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12); }
+}
+
+.rs__select {
+  padding: $spacing-sm $spacing-md;
+  border: 1px solid $border-color;
+  border-radius: $border-radius-md;
+  font-size: $font-size-sm;
+  background: $bg-primary;
+  cursor: pointer;
+  &:focus { outline: none; border-color: $accent-color; }
+}
+
+.rs__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: $spacing-md;
+}
+
+.rs__state {
+  padding: $spacing-2xl;
+  text-align: center;
+  color: $text-muted;
+  &--error { color: $error-color; }
+}
+
+.rs__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: $spacing-3xl;
+  color: $text-muted;
+}
+
+.rs__empty-icon {
+  font-size: 48px;
+  margin-bottom: $spacing-md;
+}
+
+.rs__empty-text {
+  font-size: $font-size-base;
+  margin-bottom: $spacing-md;
+}
+
+.rs__empty-link {
+  color: $accent-color;
+  text-decoration: none;
+  font-size: $font-size-sm;
 }
 </style>

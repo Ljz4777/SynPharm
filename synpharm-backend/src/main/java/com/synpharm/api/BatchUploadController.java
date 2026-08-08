@@ -35,13 +35,19 @@ public class BatchUploadController {
 
     @GetMapping("/status/{batchId}")
     @Operation(summary = "查询批量状态", description = "查询批量任务进度和状态")
-    public Result<BatchStatusResponse> getBatchStatus(@PathVariable String batchId) {
-        return Result.success(batchProcessService.getBatchStatus(batchId));
+    public Result<BatchStatusResponse> getBatchStatus(
+            @RequestHeader("Authorization") String token,
+            @PathVariable String batchId) {
+        Long userId = jwtUtils.getUserIdFromToken(token.replace("Bearer ", ""));
+        return Result.success(batchProcessService.getBatchStatus(batchId, userId));
     }
 
     @GetMapping("/download/{batchId}")
     @Operation(summary = "下载批量结果", description = "下载批量预测结果文件")
-    public ResponseEntity<?> downloadBatch(@PathVariable String batchId) {
-        return batchProcessService.downloadBatch(batchId);
+    public ResponseEntity<?> downloadBatch(
+            @RequestHeader("Authorization") String token,
+            @PathVariable String batchId) {
+        Long userId = jwtUtils.getUserIdFromToken(token.replace("Bearer ", ""));
+        return batchProcessService.downloadBatch(batchId, userId);
     }
 }

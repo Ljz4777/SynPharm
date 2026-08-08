@@ -155,12 +155,12 @@ const handleDeleteAccount = () => {
   display: flex;
   min-height: 100vh;
   background: #f8fafc;
+  padding-top: $header-height;
 }
 
 .profile__content {
   flex: 1;
-  margin-left: $sidebar-width;
-  min-height: 100vh;
+  min-height: calc(100vh - #{$header-height});
 }
 
 .profile__header {

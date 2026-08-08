@@ -48,12 +48,15 @@
 └────────────────────────────────────────────────────────────┘
 ```
 
+> 端口均可通过 `deploy/.env` 的 `*_PORT` 修改；括号内为本项目当前 `.env` 实际值。
+
 | 服务 | 镜像基础 | 端口(宿主) | 健康检查 |
 |---|---|---|---|
-| mysql | mysql:8.0 | 3306 | mysqladmin ping |
-| redis | redis:7-alpine | 6379 | redis-cli ping |
-| backend | eclipse-temurin:17-jre | 8080 | `/actuator/health` |
-| fastapi | python:3.11-slim | 8000 | `/health` |
+| mysql | mysql:8.0 | 3306（当前 3307） | mysqladmin ping |
+| redis | redis:7-alpine | 6379（当前 6380） | redis-cli ping |
+| rabbitmq | rabbitmq:3.13-management-alpine | 15672(仅内网) | rabbitmq-diagnostics ping |
+| backend | eclipse-temurin:17-jre | 8080（当前 7000） | `/actuator/health` |
+| fastapi | python:3.11-slim | 8000（当前 9000） | `/health` |
 | frontend | nginx-unprivileged:1.27 | 80 | `GET /` |
 
 ---
@@ -63,7 +66,7 @@
 ```
 SynPharm/
 ├── deploy/                          ★ 全部部署/环境文件统一入口
-│   ├── docker-compose.yml           # 服务编排（5 个服务）
+│   ├── docker-compose.yml           # 服务编排（6 个服务，含 RabbitMQ）
 │   ├── .env.example                 # 环境变量模板（复制为 .env）
 │   ├── scripts/
 │   │   ├── start.bat / start.sh     # 一键启动（跨平台）
@@ -158,7 +161,7 @@ scripts\start.bat
 chmod +x scripts/start.sh && ./scripts/start.sh
 ```
 
-首次启动会自动构建 3 个镜像（前端/后端/FastAPI），后端与 FastAPI 构建因需拉取依赖约 10~30 分钟；之后启动为秒级。
+首次启动会自动构建 3 个业务镜像（前端/后端/FastAPI），后端与 FastAPI 构建因需拉取依赖约 10~30 分钟；之后启动为秒级。RabbitMQ 使用官方镜像（无需构建），随 compose 一起启动。
 
 ### 5.3 验证
 
@@ -186,6 +189,8 @@ curl http://localhost:8000/health             # {"status":"healthy"}
 | `MYSQL_PORT` | 3306 | 宿主映射端口 |
 | `REDIS_PORT` | 6379 | 宿主映射端口 |
 | `REDIS_PASSWORD` | 空 | 生产建议设置 |
+| `RABBITMQ_USER` | synpharm | RabbitMQ 用户名（**密码必填**） |
+| `RABBITMQ_PASSWORD` | - | **必填**，RabbitMQ 密码 |
 | `JWT_SECRET` | - | **必填**，≥32 字节随机串 |
 | `JWT_EXPIRATION` | 86400000 | Token 有效期(ms) |
 | `FASTAPI_PORT` | 8000 | 宿主映射端口 |

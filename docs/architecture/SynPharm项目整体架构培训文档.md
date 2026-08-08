@@ -6,7 +6,7 @@
 2. [项目结构](#2-项目结构)
 3. [核心架构](#3-核心架构)
 4. [Redis应用详解](#4-redis应用详解)
-5. [异步线程池与批量处理](#5-异步线程池与批量处理)
+5. [RabbitMQ消息队列与批量处理](#5-rabbitmq消息队列与批量处理)
 6. [核心功能模块](#6-核心功能模块)
 7. [数据库设计](#7-数据库设计)
 8. [FastAPI算法引擎](#8-fastapi算法引擎)
@@ -36,7 +36,7 @@
 | **数据库** | MySQL 8.0+ | 关系型数据存储 |
 | **缓存** | Redis 7.0+ | 验证码、Token黑名单、登录限流 |
 | **认证** | JWT + Spring Security | 用户身份认证 |
-| **异步** | @Async + ThreadPoolTaskExecutor | 批量任务异步处理 |
+| **异步** | RabbitMQ 消息队列 | 批量任务异步处理 |
 | **文档** | Knife4j/Swagger | API接口文档 |
 
 ---
@@ -57,7 +57,7 @@ SynPharm/
 │   ├── src/main/java/com/synpharm/
 │   │   ├── api/              # 控制器层
 │   │   ├── client/           # 外部API客户端（FastApiClient）
-│   │   ├── config/           # 配置类（AsyncConfig, Redis, JWT）
+│   │   ├── config/           # 配置类（RabbitConfig, Redis, JWT）
 │   │   ├── dto/              # 数据传输对象
 │   │   ├── enums/            # 枚举类（InputType, AlgoType, OutputType）
 │   │   ├── exception/        # 异常处理
@@ -268,40 +268,30 @@ if (redisTemplate.hasKey(TOKEN_BLACKLIST_KEY + jti)) {
 
 ---
 
-## 5. 异步线程池与批量处理
+## 5. RabbitMQ 消息队列与批量处理
 
-### 5.1 线程池配置
+> 批量预测已由「线程池异步」升级为 **RabbitMQ 消息队列异步**（v3.1.0）：消息持久化、失败进死信队列、任务状态以数据库为权威，可水平扩展。
 
-**文件**：`synpharm-backend/src/main/java/com/synpharm/config/AsyncConfig.java`
+### 5.1 消息基础设施配置
 
-```java
-@Bean("batchTaskExecutor")
-public Executor batchTaskExecutor() {
-    ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-    executor.setCorePoolSize(4);
-    executor.setMaxPoolSize(8);
-    executor.setQueueCapacity(100);
-    executor.setThreadNamePrefix("batch-predict-");
-    executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
-    executor.setWaitForTasksToCompleteOnShutdown(true);
-    executor.setAwaitTerminationSeconds(60);
-    executor.initialize();
-    return executor;
-}
-```
+**文件**：`synpharm-backend/src/main/java/com/synpharm/mq/RabbitConfig.java`
 
-**线程池参数说明**：
-
-| 参数 | 值 | 说明 |
+| 组件 | 名称 | 说明 |
 |:---|:---|:---|
-| `corePoolSize` | 4 | 核心线程数，常驻线程 |
-| `maxPoolSize` | 8 | 最大线程数，峰值时的线程数 |
-| `queueCapacity` | 100 | 任务队列容量，超过后创建新线程 |
-| `rejectedExecutionHandler` | CallerRunsPolicy | 拒绝策略：队列满时由调用线程执行 |
+| Exchange | `synpharm.exchange` | direct、durable，统一业务交换机 |
+| 业务队列 | `batch.task.queue` | 批量任务队列，绑定交换机 |
+| 死信队列 | `batch.task.dlq` | 消费失败（nack 且 requeue=false）进入死信 |
+
+**消费确认**（`mq/BatchTaskConsumer.java`）：采用**手动 ack**（`ackMode="MANUAL"`）：
+- 处理成功 → `basicAck`（确认消费）
+- 处理失败 → `basicNack(requeue=false)`（不重回队列，进入死信队列，便于人工/脚本排查重投）
 
 ### 5.2 批量处理流程
 
-**文件**：`synpharm-backend/src/main/java/com/synpharm/service/impl/BatchProcessServiceImpl.java`
+**文件**：
+- 生产者：`mq/BatchTaskProducer.java`
+- 消费者：`mq/BatchTaskConsumer.java`
+- 业务逻辑：`service/impl/BatchProcessServiceImpl.java`
 
 **流程架构**：
 
@@ -310,84 +300,88 @@ sequenceDiagram
     participant Client
     participant Controller
     participant Service
-    participant Pool
+    participant Producer
+    participant MQ as RabbitMQ
+    participant Consumer
     participant FastAPI
-    
-    Client->>Controller: POST /api/batch/upload
-    Controller->>Service: uploadBatch(file, algoType)
-    Service->>Service: 保存文件到本地
-    Service->>Service: 创建BatchTask记录
-    Service->>Service: 存入progressCache
-    Service->>Pool: @Async submitBatchTask(batchId)
-    Service-->>Controller: BatchUploadResponse
-    Controller-->>Client: 200 OK {batchId}
-    
-    Note over Pool: 异步执行
-    Pool->>Service: processBatch(batchId)
+
+    Client->>Controller: POST /api/batch/upload (file, algoType)
+    Controller->>Service: uploadBatch(file, algoType, userId)
+    Service->>Service: 保存CSV + 统计行数 + 建 batch_task(status=0)
+    Service->>Producer: sendBatchTask(batchId, algoType)
+    Producer->>MQ: convertAndSend(synpharm.exchange)
+    Service-->>Controller: BatchUploadResponse {batchId, status: PENDING}
+    Controller-->>Client: 200 OK
+
+    MQ->>Consumer: 投递消息
+    Consumer->>Service: processBatch(batchId, algoType)
+    Service->>Service: DB为权威读取任务 + 幂等校验(status 0/1 跳过)
+    Service->>Service: status=1 置为处理中
     loop 分片处理（每50条）
-        Service->>Service: 解析CSV行
         Service->>FastAPI: POST /v1/predict/batch
         FastAPI-->>Service: BatchPredictionResponse
-        Service->>Service: 更新progressCache
+        Service->>Service: 更新 success_count + 进度
     end
     Service->>Service: 写入结果CSV
-    Service->>Service: 更新数据库状态
-    Service->>Service: 移除progressCache
+    Service->>Service: status=2 SUCCESS + resultUrl
+    Consumer->>MQ: basicAck
+
+    Note over Client: 前端每2s轮询
+    Client->>Controller: GET /api/batch/status/{batchId}
+    Controller->>Service: getBatchStatus(batchId, userId)
+    Service->>Service: 归属校验（仅本人）
+    Service-->>Client: BatchStatusResponse
 ```
 
 **核心代码**：
 
 ```java
-// 异步提交批量任务
-@Async("batchTaskExecutor")
-public void submitBatchTask(String batchId, String algoType) {
-    processBatch(batchId, algoType);
-}
+// 生产者：上传后投递消息
+batchTaskProducer.sendBatchTask(batchId, algoType);
 
-// 批量处理主逻辑
-public void processBatch(String batchId, String algoType) {
-    BatchTaskProgress progress = progressCache.get(batchId);
-    progress.setStatus(1);
-    
-    List<PredictRequest> chunk = new ArrayList<>();
-    for (String line : lines) {
-        chunk.add(request);
-        if (chunk.size() >= CHUNK_SIZE) {
-            processChunk(batchId, chunk, allResults);
-            chunk.clear();
-        }
+// 消费者：@RabbitListener 手动 ack
+@RabbitListener(queues = "batch.task.queue", ackMode = "MANUAL")
+public void onMessage(BatchTaskMessage msg, Channel channel,
+                      @Header(AmqpHeaders.DELIVERY_TAG) long tag) {
+    try {
+        batchProcessService.processBatch(msg.getBatchId(), msg.getAlgoType());
+        channel.basicAck(tag, false);
+    } catch (Exception e) {
+        channel.basicNack(tag, false, false); // 进死信
     }
-    
-    CsvUtils.writeResultFile(resultPath, algoType, allResults);
-    progress.setStatus(2);
+}
+
+// 业务：DB 为权威 + 幂等消费
+public void processBatch(String batchId, String algoType) {
+    BatchTask task = batchTaskMapper.selectByBatchId(batchId);
+    if (task == null) return;
+    if (task.getStatus() == 1 || task.getStatus() == 2) return; // 幂等跳过
+    task.setStatus(1); // PROCESSING
+    // ... 分片调用 FastAPI ...
+    task.setStatus(2); // SUCCESS（异常置 3 FAIL）
+    batchTaskMapper.updateById(task);
 }
 ```
 
-### 5.3 进度追踪机制
+### 5.3 状态追踪机制
 
-**内存缓存 + 定期刷库**：
+**DB 为权威，Redis 仅缓存**：任务状态、算法类型、进度、结果路径全部持久化在 `batch_task` 表；Redis 缓存仅用于进度回显，重启/过期不影响正确性。
 
-```java
-// 内存缓存（ConcurrentHashMap线程安全）
-private final Map<String, BatchTaskProgress> progressCache = new ConcurrentHashMap<>();
+**进度更新**：每处理 5 个分片（`PROGRESS_UPDATE_INTERVAL`）批量更新一次数据库，同时刷新 Redis 缓存。
 
-// 进度更新频率
-private static final int PROGRESS_UPDATE_INTERVAL = 5;
-
-// 每处理5个分片，批量更新一次数据库
-if (chunkCount % PROGRESS_UPDATE_INTERVAL == 0) {
-    batchTaskMapper.updateById(progress.getTask());
-}
-```
-
-**状态码定义**：
+**状态码定义**（`batch_task.status`）：
 
 | 状态码 | 含义 |
 |:---|:---|
-| 0 | PENDING（等待中） |
+| 0 | PENDING（待处理） |
 | 1 | PROCESSING（处理中） |
 | 2 | SUCCESS（成功） |
 | 3 | FAIL（失败） |
+
+**可靠性**：
+- 手动 ack + 死信队列：消费失败不丢失，可人工/脚本从 DLQ 排查重投
+- 幂等消费：重复投递不重复处理（status 0/1 跳过）
+- 归属校验：`getBatchStatus` / `downloadBatch` 均校验 `userId`，防止越权访问他人批次（修复 IDOR）
 
 ---
 
@@ -728,7 +722,7 @@ Spring启动时自动扫描并注册到工厂：
 | **类型安全** | 泛型接口 | 编译期检查类型，运行时无需强制转换 |
 | **组件复用** | 通用解析器/格式化器 | 一个组件支持所有算法类型 |
 | **Redis缓存** | 验证码、限流、Token黑名单 | 高性能缓存，支持原子操作 |
-| **异步处理** | @Async + ThreadPoolTaskExecutor | 批量任务异步执行，不阻塞主线程 |
+| **异步处理** | RabbitMQ 消息队列 | 批量任务异步执行，不阻塞主线程 |
 | **进度追踪** | 内存缓存 + 定期刷库 | 高效进度更新，减少数据库压力 |
 
 ---
@@ -750,4 +744,4 @@ Spring启动时自动扫描并注册到工厂：
 **版本**: v3.1.0  
 **创建日期**: 2026-07-25  
 **适用场景**: 团队培训、新成员入职  
-**包含**: Redis应用、线程池异步批处理、策略模式数据流架构
+**包含**: Redis应用、RabbitMQ异步批处理、策略模式数据流架构

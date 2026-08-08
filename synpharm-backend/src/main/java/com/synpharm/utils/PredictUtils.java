@@ -138,7 +138,7 @@ public class PredictUtils {
         
         for (int i = 0; i < 3; i++) {
             PredictResultResponse.InteractionInfo info = PredictResultResponse.InteractionInfo.builder()
-                    .residue(residues[random.nextInt(residues.length)])
+                    .residueName(residues[random.nextInt(residues.length)])
                     .type(types[random.nextInt(types.length)])
                     .distance(random.nextDouble() * 3 + 2)
                     .build();

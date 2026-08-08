@@ -77,9 +77,11 @@ public class SecurityConfig {
                 ).permitAll()
 
                 // ---- 管理员接口（需要admin角色） ----
+                // 注意：Spring 6 PathPatternParser 中 `**` 只能位于路径末尾，
+                // 故 /api/users/{id}/status 用单段通配 `*` 表达
                 .requestMatchers(
                     "/api/users",
-                    "/api/users/**/status"
+                    "/api/users/*/status"
                 ).hasRole("admin")
 
                 // ---- 其他所有请求都需要认证（包括登出接口） ----

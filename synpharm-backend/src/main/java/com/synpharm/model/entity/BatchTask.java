@@ -37,6 +37,9 @@ public class BatchTask {
     @TableField("status")
     private Integer status;
 
+    @TableField("algo_type")
+    private String algoType;
+
     @TableField("result_url")
     private String resultUrl;
 
@@ -48,4 +51,8 @@ public class BatchTask {
 
     @TableField("update_time")
     private LocalDateTime updateTime;
+
+    @TableField("deleted")
+    @TableLogic
+    private Integer deleted;
 }
