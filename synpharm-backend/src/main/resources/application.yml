@@ -21,8 +21,8 @@ spring:
   mail:
     host: smtp.qq.com
     port: 465
-    username: ${QQ_EMAIL:noreply@synpharm.com}
-    password: ${QQ_EMAIL_AUTH_CODE:your-auth-code}
+    username: ${QQ_EMAIL:3086499874@qq.com}
+    password: ${QQ_EMAIL_AUTH_CODE:cphjbrgtndkwdhde}
     properties:
       mail:
         smtp:
