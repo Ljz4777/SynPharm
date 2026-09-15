@@ -10,12 +10,23 @@
 # ---------- 阶段一：安装依赖 ----------
 FROM python:3.11-slim AS deps
 
+# 依赖下载源：默认走国内镜像，避免 download.pytorch.org / pypi.org 在受限网络下超时导致构建失败。
+# 如需改回官方源，构建时覆盖：--build-arg PIP_INDEX_URL=https://pypi.org/simple/
+#                              --build-arg PYTORCH_WHEELS_URL=https://download.pytorch.org/whl/cpu/
+ARG PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
+ARG PYTORCH_WHEELS_URL=https://mirrors.aliyun.com/pytorch-wheels/cpu/
+
 WORKDIR /deps
 COPY requirements.txt .
-# 先安装 CPU 版 PyTorch（从 PyTorch CPU 索引，约 170MB，避免拉取 ~2GB 的 CUDA 依赖）
-RUN pip install --no-cache-dir --prefix=/install torch==2.1.0 --index-url https://download.pytorch.org/whl/cpu
+# 先安装 CPU 版 PyTorch（约 176MB，避免拉取 ~2GB 的 CUDA 依赖）
+# 注：PyTorch wheel 源是扁平目录（非 PEP503 索引），必须用 --find-links；
+#     固定 +cpu 本地版本号可确保不会从 PyPI 误选到 CUDA 版本。
+RUN pip install --no-cache-dir --prefix=/install "torch==2.1.0+cpu" \
+      --find-links "${PYTORCH_WHEELS_URL}" \
+      --index-url "${PIP_INDEX_URL}"
 # 再安装其余依赖（requirements.txt 已不含 torch）
-RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt \
+      --index-url "${PIP_INDEX_URL}"
 
 # ---------- 阶段二：运行 ----------
 FROM python:3.11-slim

@@ -52,7 +52,7 @@
 
 | 服务 | 镜像基础 | 端口(宿主) | 健康检查 |
 |---|---|---|---|
-| mysql | mysql:8.0 | 3306（当前 3307） | mysqladmin ping |
+| mysql | mysql:8.0 | 3306（当前 13307） | mysqladmin ping |
 | redis | redis:7-alpine | 6379（当前 6380） | redis-cli ping |
 | rabbitmq | rabbitmq:3.13-management-alpine | 15672(仅内网) | rabbitmq-diagnostics ping |
 | backend | eclipse-temurin:17-jre | 8080（当前 7000） | `/actuator/health` |
@@ -270,6 +270,77 @@ USER appuser
 | 端口被占用 | 修改 `.env` 对应端口后重启 |
 | 前端打不开 | 确认 `FRONTEND_PORT`、后端是否 healthy；`docker compose ps` |
 | MySQL 初始化脚本未执行 | 删除 `mysql_data` 卷后重启：`docker compose down -v && scripts/start` |
+| 构建报 `failed to fetch anonymous token` / `auth.docker.io:443` 超时 | 见下方「受限网络下拉取镜像」 |
+| 容器启动报 `bind: ... forbidden by its access permissions` | 见下方「Windows 保留端口段」 |
+
+### 10.1 受限网络下拉取镜像失败
+
+**症状**：`docker compose up --build` 在 `FROM` 阶段就失败，报
+`failed to fetch anonymous token` 或 `dial tcp ...:443: connectex: ... did not properly respond`。
+此时应用代码根本没被执行，是基础镜像没拉下来。
+
+**原因**：Docker Desktop **不会**自动读取 Windows 的系统代理设置。
+当本机无法直连 Docker Hub 时，引擎只能裸连，必然超时。
+
+**三种解法，任选其一：**
+
+1. **配置镜像加速源（推荐，不依赖代理）**
+
+   编辑 `%USERPROFILE%\.docker\daemon.json`（Linux/macOS 为 `/etc/docker/daemon.json`）：
+
+   ```json
+   {
+     "registry-mirrors": [
+       "https://docker.m.daocloud.io",
+       "https://docker.1ms.run",
+       "https://docker.1panel.live"
+     ]
+   }
+   ```
+
+   然后重启引擎：Windows 用 `docker desktop restart`，Linux 用 `sudo systemctl restart docker`。
+
+   验证：
+
+   ```bash
+   docker info --format "{{json .RegistryConfig}}"   # 应能看到 Mirrors 列表
+   docker pull alpine:latest                          # 用一个未缓存的镜像验证
+   ```
+
+2. **给 Docker 配置代理**（需自备可用代理）
+   Docker Desktop → Settings → Resources → Proxies 填代理地址。
+   ⚠️ 引擎运行在 WSL2 虚拟机内，代理地址必须写 `http://host.docker.internal:<端口>`，
+   **不能写 `127.0.0.1`**（在 VM 里它指向 VM 自己）。
+
+3. **换到可直连 Docker Hub 的网络**后重试。
+
+> Python 依赖同样需要国内源：`synpharm-fastapi/Dockerfile` 默认使用阿里云 PyPI 与
+> PyTorch CPU wheel 镜像，如需改回官方源，可用 `--build-arg` 覆盖
+> `PIP_INDEX_URL` / `PYTORCH_WHEELS_URL`。
+
+### 10.2 Windows 保留端口段导致容器无法启动
+
+**症状**：镜像构建成功，但容器启动时报
+
+```text
+Error response from daemon: ports are not available: exposing port TCP 0.0.0.0:3307 -> ...:
+listen tcp 0.0.0.0:3307: bind: An attempt was made to access a socket in a way forbidden by its access permissions.
+```
+
+**原因**：Windows 会把成段的端口保留给 Hyper-V / WSL，落在保留段内的端口任何进程都无法绑定。
+
+**处理**：
+
+```powershell
+# 查看当前保留端口段
+netsh interface ipv4 show excludedportrange protocol=tcp
+
+# 用仓库自带的前置检查脚本，自动判断 .env 中的端口是否可用
+powershell -NoProfile -File scripts\preflight.ps1 -Ports 80,7000,9050,13307,6380 -Names frontend,backend,fastapi,mysql,redis
+```
+
+把 `.env` 中冲突的 `*_PORT` 改到保留段之外再重启即可
+（本项目 MySQL 已因此从 3307 改用 13307）。
 
 ---
 
