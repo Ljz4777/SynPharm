@@ -2,81 +2,90 @@
   <div class="db">
     <Sidebar />
     <main class="db__main">
-      <header class="db__header">
-        <div>
-          <h1 class="db__title">仪表盘</h1>
-          <p class="db__subtitle">欢迎回来，{{ authStore.userNickname }}</p>
-        </div>
-        <span class="db__date">{{ currentDate }}</span>
-      </header>
+      <PageHeader
+        icon="📊"
+        title="仪表盘"
+        :subtitle="`欢迎回来，${authStore.userNickname}`"
+      >
+        <template #actions>
+          <span class="db__date">{{ currentDate }}</span>
+        </template>
+      </PageHeader>
+
+      <TabBar v-model="activeTab" :tabs="tabs" />
 
       <div v-if="loadError" class="db__error">{{ loadError }}</div>
-      <div v-else-if="loading" class="db__loading">加载中…</div>
 
-      <section class="db__stats">
-        <div class="db__stat">
-          <span class="db__stat-icon">📊</span>
-          <div class="db__stat-info">
-            <b class="db__stat-value">{{ stats.totalTasks }}</b>
-            <span class="db__stat-label">总任务数</span>
-          </div>
-        </div>
-        <div class="db__stat">
-          <span class="db__stat-icon">✅</span>
-          <div class="db__stat-info">
-            <b class="db__stat-value">{{ stats.completedTasks }}</b>
-            <span class="db__stat-label">已完成</span>
-          </div>
-        </div>
-        <div class="db__stat">
-          <span class="db__stat-icon">⏳</span>
-          <div class="db__stat-info">
-            <b class="db__stat-value">{{ stats.runningTasks }}</b>
-            <span class="db__stat-label">运行中</span>
-          </div>
-        </div>
-        <div class="db__stat">
-          <span class="db__stat-icon">🎯</span>
-          <div class="db__stat-info">
-            <b class="db__stat-value">{{ stats.averageConfidence }}%</b>
-            <span class="db__stat-label">平均置信度</span>
-          </div>
-        </div>
-      </section>
+      <!-- 页签一：最近任务 -->
+      <AppCard v-if="activeTab === 'tasks'" padding="none">
+        <template #actions>
+          <router-link to="/tasks" class="db__link">查看全部 →</router-link>
+        </template>
 
-      <section class="db__sections">
-        <div class="db__card">
-          <div class="db__card-head">
-            <h2 class="db__card-title">最近任务</h2>
-            <router-link to="/tasks" class="db__link">查看全部</router-link>
-          </div>
-          <div class="db__tasks">
-            <div v-for="task in recentTasks" :key="task.id" class="db__task">
-              <div class="db__task-info">
-                <span class="db__task-name">{{ task.name || task.taskNo || task.id }}</span>
-                <span class="db__task-type">{{ task.predictType || task.type }}</span>
-              </div>
-              <span class="db__status" :class="`db__status--${task.status}`">{{ getStatusText(task.status) }}</span>
+        <div v-if="loading" class="db__tasks">
+          <span v-for="n in 3" :key="n" class="u-skeleton db__row-skeleton" />
+        </div>
+
+        <div v-else-if="recentTasks.length" class="db__tasks">
+          <div v-for="task in recentTasks" :key="task.id" class="db__task">
+            <div class="db__task-info">
+              <span class="db__task-name">{{ task.name || task.taskNo || task.id }}</span>
+              <span class="db__task-type">{{ task.predictType || task.type || '—' }}</span>
             </div>
+            <StatusTag kind="status" :value="task.status" />
           </div>
         </div>
 
-        <div class="db__card">
-          <div class="db__card-head">
-            <h2 class="db__card-title">最近结果</h2>
-            <router-link to="/results" class="db__link">查看全部</router-link>
-          </div>
-          <div class="db__results">
-            <ResultCard
-              v-for="result in recentResults"
-              :key="result.id"
-              :result="result"
-              @detail="handleResultDetail"
-              @3d="handleResult3D"
-            />
-          </div>
+        <EmptyState
+          v-else
+          icon="📋"
+          title="还没有预测任务"
+          description="到预测中心发起一次单条或批量预测，任务会出现在这里。"
+        />
+      </AppCard>
+
+      <!-- 页签二：最近结果 -->
+      <AppCard v-else-if="activeTab === 'results'" padding="none">
+        <template #actions>
+          <router-link to="/results" class="db__link">查看全部 →</router-link>
+        </template>
+
+        <div v-if="loading" class="db__results">
+          <span v-for="n in 2" :key="n" class="u-skeleton db__row-skeleton" />
         </div>
-      </section>
+
+        <div v-else-if="recentResults.length" class="db__results">
+          <ResultCard
+            v-for="result in recentResults"
+            :key="result.id"
+            :result="result"
+            @detail="handleResultDetail"
+            @3d="handleResult3D"
+          />
+        </div>
+
+        <EmptyState
+          v-else
+          icon="📈"
+          title="还没有预测结果"
+          description="完成一次预测后，结果会展示在这里，并可进入 3D 可视化查看结构。"
+        />
+      </AppCard>
+
+      <!-- 页签三：统计指标 -->
+      <AppCard v-else padding="lg">
+        <div class="db__stats">
+          <template v-if="loading">
+            <span v-for="n in 4" :key="n" class="u-skeleton db__skeleton" />
+          </template>
+          <template v-else>
+            <StatCard icon="📊" :value="stats.totalTasks" label="总任务数" tone="brand" />
+            <StatCard icon="✅" :value="stats.completedTasks" label="已完成" tone="success" />
+            <StatCard icon="⏳" :value="stats.runningTasks" label="运行中" tone="warning" />
+            <StatCard icon="🎯" :value="`${stats.averageConfidence}%`" label="平均置信度" tone="info" />
+          </template>
+        </div>
+      </AppCard>
     </main>
   </div>
 </template>
@@ -88,6 +97,12 @@ import { useAuthStore } from '@/stores/auth'
 import { taskApi, resultApi } from '@/api/predict'
 import Sidebar from '@/components/Sidebar.vue'
 import ResultCard from '@/components/ResultCard.vue'
+import PageHeader from '@/components/ui/PageHeader.vue'
+import AppCard from '@/components/ui/AppCard.vue'
+import StatCard from '@/components/ui/StatCard.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
+import StatusTag from '@/components/ui/StatusTag.vue'
+import TabBar from '@/components/ui/TabBar.vue'
 import type { PredictionResult, Task } from '@/types'
 
 const authStore = useAuthStore()
@@ -97,6 +112,16 @@ const tasks = ref<Task[]>([])
 const results = ref<PredictionResult[]>([])
 const loading = ref(false)
 const loadError = ref('')
+
+/** 二级页签：最近任务 / 最近结果 / 统计指标 */
+type TabKey = 'tasks' | 'results' | 'stats'
+const activeTab = ref<TabKey>('tasks')
+
+const tabs = computed(() => [
+  { key: 'tasks', label: '最近任务', icon: '📋', count: tasks.value.length },
+  { key: 'results', label: '最近结果', icon: '📈', count: results.value.length },
+  { key: 'stats', label: '统计指标', icon: '📊' }
+])
 
 async function loadDashboard(): Promise<void> {
   loading.value = true
@@ -154,16 +179,6 @@ const recentResults = computed(() => {
   ).slice(0, 2)
 })
 
-const getStatusText = (status: string): string => {
-  const texts: Record<string, string> = {
-    completed: '已完成',
-    running: '运行中',
-    pending: '待处理',
-    failed: '失败'
-  }
-  return texts[status] || status
-}
-
 const handleResultDetail = (result: PredictionResult) => {
   router.push({
     path: '/result/' + String(result.id),
@@ -183,204 +198,7 @@ const handleResult3D = (result: PredictionResult) => {
 </script>
 
 <style lang="scss" scoped>
-.dashboard {
-  display: flex;
-  min-height: 100vh;
-  background: $bg-secondary;
-  padding-top: $header-height;
-}
-
-.dashboard__content {
-  flex: 1;
-  padding: $spacing-lg $spacing-xl;
-}
-
-.dashboard__header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: $spacing-xl;
-}
-
-.dashboard__title {
-  font-size: 28px;
-  font-weight: 600;
-  color: $text-primary;
-  margin-bottom: $spacing-xs;
-  letter-spacing: -0.3px;
-}
-
-.dashboard__subtitle {
-  font-size: $font-size-sm;
-  color: $text-muted;
-}
-
-.dashboard__date {
-  font-size: $font-size-sm;
-  color: $text-secondary;
-}
-
-.dashboard__stats {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: $spacing-lg;
-  margin-bottom: $spacing-xl;
-}
-
-.dashboard__stat-card {
-  background: $bg-primary;
-  padding: $spacing-lg;
-  border-radius: $border-radius-lg;
-  display: flex;
-  align-items: center;
-  gap: $spacing-md;
-  border: 1px solid $border-light;
-  transition: all $transition-fast;
-  
-  &:hover {
-    box-shadow: $shadow-sm;
-  }
-}
-
-.dashboard__stat-icon {
-  font-size: 36px;
-}
-
-.dashboard__stat-info {
-  display: flex;
-  flex-direction: column;
-}
-
-.dashboard__stat-value {
-  font-size: 28px;
-  font-weight: 700;
-  color: $primary-color;
-  letter-spacing: -0.5px;
-}
-
-.dashboard__stat-label {
-  font-size: $font-size-xs;
-  color: $text-muted;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-  margin-top: 2px;
-}
-
-.dashboard__main {
-  display: grid;
-  grid-template-columns: 1fr 2fr;
-  gap: $spacing-xl;
-}
-
-.dashboard__section {
-  background: $bg-primary;
-  border-radius: $border-radius-lg;
-  padding: $spacing-xl;
-  border: 1px solid $border-light;
-}
-
-.dashboard__section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: $spacing-lg;
-}
-
-.dashboard__section-title {
-  font-size: $font-size-lg;
-  font-weight: 600;
-  color: $text-primary;
-}
-
-.dashboard__section-link {
-  font-size: $font-size-xs;
-  color: $accent-color;
-  text-decoration: none;
-  font-weight: 500;
-  
-  &:hover {
-    text-decoration: underline;
-  }
-}
-
-.dashboard__tasks {
-  display: flex;
-  flex-direction: column;
-  gap: $spacing-sm;
-}
-
-.dashboard__task-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: $spacing-md;
-  background: $bg-secondary;
-  border-radius: $border-radius-md;
-  transition: all $transition-fast;
-  
-  &:hover {
-    background: $bg-tertiary;
-  }
-}
-
-.dashboard__task-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.dashboard__task-name {
-  font-size: $font-size-sm;
-  font-weight: 500;
-  color: $text-primary;
-}
-
-.dashboard__task-type {
-  font-size: $font-size-xs;
-  color: $text-muted;
-}
-
-.dashboard__task-status {
-  display: flex;
-  align-items: center;
-}
-
-.dashboard__status-badge {
-  font-size: $font-size-xs;
-  font-weight: 500;
-  padding: 4px 12px;
-  border-radius: 100px;
-  
-  &--completed {
-    background: rgba($success-color, 0.1);
-    color: $success-color;
-  }
-  
-  &--running {
-    background: rgba($accent-color, 0.1);
-    color: $accent-color;
-  }
-  
-  &--pending {
-    background: rgba($warning-color, 0.1);
-    color: $warning-color;
-  }
-  
-  &--failed {
-    background: rgba($error-color, 0.1);
-    color: $error-color;
-  }
-}
-
-.dashboard__results {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: $spacing-lg;
-}
-</style>
-
-<style lang="scss" scoped>
-/* ===================== 仪表盘（新风格） ===================== */
+/* ===================== 仪表盘 ===================== */
 .db {
   display: flex;
   min-height: 100vh;
@@ -388,29 +206,10 @@ const handleResult3D = (result: PredictionResult) => {
   padding-top: $header-height;
 }
 
+// 宽度与居中由 styles/base.scss 的全局规则统一提供，此处不再重复声明
 .db__main {
   flex: 1;
-  padding: $spacing-xl;
-  max-width: 1100px;
-}
-
-.db__header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  margin-bottom: $spacing-lg;
-}
-
-.db__title {
-  font-size: $font-size-2xl;
-  font-weight: 700;
-  color: $text-primary;
-}
-
-.db__subtitle {
-  margin-top: $spacing-xs;
-  font-size: $font-size-sm;
-  color: $text-muted;
+  padding: $spacing-lg $spacing-xl $spacing-2xl;
 }
 
 .db__date {
@@ -421,90 +220,38 @@ const handleResult3D = (result: PredictionResult) => {
   border-radius: 999px;
 }
 
-.db__loading,
 .db__error {
   margin-bottom: $spacing-lg;
   padding: $spacing-sm $spacing-md;
   border-radius: $border-radius-md;
   font-size: $font-size-sm;
   text-align: center;
-}
-
-.db__loading {
-  background: $bg-tertiary;
-  color: $text-muted;
-}
-
-.db__error {
   background: rgba(239, 68, 68, 0.08);
   color: $error-color;
 }
 
 .db__stats {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: $spacing-md;
-  margin-bottom: $spacing-lg;
 }
 
-.db__stat {
-  display: flex;
-  align-items: center;
-  gap: $spacing-md;
-  padding: $spacing-md $spacing-lg;
-  background: $bg-primary;
-  border: 1px solid $border-color;
-  border-radius: $border-radius-lg;
-  box-shadow: $shadow-sm;
+.db__skeleton {
+  height: 78px;
+  border-radius: $radius-card;
 }
 
-.db__stat-icon {
-  font-size: $font-size-2xl;
+// 列表加载态的骨架条
+.db__row-skeleton {
+  height: 52px;
+  border-radius: $border-radius-md;
 }
 
-.db__stat-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.db__stat-value {
-  font-size: $font-size-2xl;
-  font-weight: 700;
-  color: $text-primary;
-}
-
-.db__stat-label {
-  font-size: $font-size-xs;
-  color: $text-muted;
-}
-
-.db__sections {
-  display: grid;
-  grid-template-columns: 1fr 1.2fr;
-  gap: $spacing-lg;
-  align-items: start;
-}
-
-.db__card {
-  background: $bg-primary;
-  border: 1px solid $border-color;
-  border-radius: $border-radius-lg;
-  padding: $spacing-lg;
-  box-shadow: $shadow-sm;
-}
-
-.db__card-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: $spacing-md;
-}
-
-.db__card-title {
-  font-size: $font-size-lg;
-  font-weight: 600;
-  color: $text-primary;
+// 窄屏下指标卡改两列，避免数值被挤压换行
+@media (max-width: 1100px) {
+  .db__stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .db__link {
@@ -518,6 +265,7 @@ const handleResult3D = (result: PredictionResult) => {
   display: flex;
   flex-direction: column;
   gap: $spacing-sm;
+  padding: $spacing-md $spacing-lg $spacing-lg;
 }
 
 .db__task {
@@ -546,20 +294,11 @@ const handleResult3D = (result: PredictionResult) => {
   color: $text-muted;
 }
 
-.db__status {
-  padding: 2px 10px;
-  border-radius: 999px;
-  font-size: $font-size-xs;
-  font-weight: 500;
-  &--completed { background: rgba(16, 185, 129, 0.12); color: $success-color; }
-  &--running { background: rgba(59, 130, 246, 0.12); color: $info-color; }
-  &--pending { background: rgba(148, 163, 184, 0.15); color: $text-muted; }
-  &--failed { background: rgba(239, 68, 68, 0.12); color: $error-color; }
-}
-
+// 结果卡片自带内边距，这里只负责列表布局
 .db__results {
   display: flex;
   flex-direction: column;
   gap: $spacing-md;
+  padding: $spacing-lg;
 }
 </style>

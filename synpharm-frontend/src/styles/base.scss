@@ -1,0 +1,220 @@
+/**
+ * 全局基础层（由 main.ts 引入一次）
+ *
+ * 职责：
+ *   1. 把 Element Plus 的主题变量对齐到本项目的设计 Token
+ *   2. 定义应用自身的语义 CSS 变量（供运行时读取 / 未来主题切换使用）
+ *   3. 提供全局的焦点、选中、滚动条、动效与少量通用工具类
+ *
+ * 注意：SCSS 变量来自 @/styles/variables.scss（vite additionalData 自动注入），
+ *       本文件无需再 import。
+ */
+
+// ---------------------------------------------------------------------------
+// 1. 与 Element Plus 主题对齐
+//
+// Element Plus 默认主色是 #409eff，而项目主色是 #3b82f6，两者并不相同——
+// 这是"页面样式割裂"的一个主要来源：原生按钮/下拉/分页的颜色与自定义组件对不上。
+// 这里把 el 变量统一映射到本项目的 Token。
+// ---------------------------------------------------------------------------
+:root {
+  --el-color-primary: #{$accent-color};
+  --el-color-primary-light-3: #{mix(#fff, $accent-color, 30%)};
+  --el-color-primary-light-5: #{mix(#fff, $accent-color, 50%)};
+  --el-color-primary-light-7: #{mix(#fff, $accent-color, 70%)};
+  --el-color-primary-light-8: #{mix(#fff, $accent-color, 80%)};
+  --el-color-primary-light-9: #{mix(#fff, $accent-color, 90%)};
+  --el-color-primary-dark-2: #{mix(#000, $accent-color, 20%)};
+
+  --el-color-success: #{$success-color};
+  --el-color-warning: #{$warning-color};
+  --el-color-danger: #{$error-color};
+  --el-color-error: #{$error-color};
+  --el-color-info: #{$info-color};
+
+  --el-text-color-primary: #{$text-primary};
+  --el-text-color-regular: #{$text-secondary};
+
+  --el-border-radius-base: #{$border-radius-sm};
+  --el-border-color: #{$border-color};
+
+  // -------------------------------------------------------------------------
+  // 2. 应用自身的语义变量
+  //    JS 侧或未来主题切换可读写这些变量，无需改动任何组件
+  // -------------------------------------------------------------------------
+  --sp-color-brand: #{$accent-color};
+  --sp-color-canvas: #{$bg-secondary};
+  --sp-color-surface: #{$bg-primary};
+  --sp-color-border: #{$border-color};
+  --sp-color-text: #{$text-primary};
+  --sp-color-text-soft: #{$text-secondary};
+  --sp-radius-card: #{$border-radius-lg};
+  --sp-shadow-card: #{$shadow-md};
+  --sp-header-height: #{$header-height};
+}
+
+// ---------------------------------------------------------------------------
+// 3. 排版与基础元素
+// ---------------------------------------------------------------------------
+html {
+  // 数值型数据等宽对齐：科学/统计表格里数字宽度不一会导致列抖动
+  font-variant-numeric: tabular-nums;
+}
+
+body {
+  color: $text-primary;
+  background: $bg-secondary;
+}
+
+// 键盘可达性：仅在键盘聚焦时显示焦点圈，鼠标点击不显示
+:focus-visible {
+  outline: 2px solid rgba(59, 130, 246, 0.55);
+  outline-offset: 2px;
+  border-radius: $border-radius-sm;
+}
+
+::selection {
+  background: rgba(59, 130, 246, 0.2);
+}
+
+// 统一滚动条到浅色细条（默认滚动条在深色顶栏与浅色卡片上都很突兀）
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.26);
+  border-radius: $radius-pill;
+
+  &:hover {
+    background: rgba(100, 116, 139, 0.42);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 4. 动效关键帧
+// ---------------------------------------------------------------------------
+@keyframes sp-shimmer {
+  0% {
+    background-position: -420px 0;
+  }
+  100% {
+    background-position: 420px 0;
+  }
+}
+
+@keyframes sp-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes sp-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 5. 通用工具类（前缀 u-，避免与业务类名冲突）
+// ---------------------------------------------------------------------------
+
+/** 数值等宽：用于表格中的数值列 */
+.u-tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/** 内容入场上浮：用于列表/卡片首屏 */
+.u-fade-up {
+  animation: sp-fade-up 0.32s $ease-out both;
+}
+
+/** 骨架屏底色：替代纯文本"加载中…" */
+.u-skeleton {
+  display: block;
+  background: linear-gradient(90deg, #eef2f7 25%, #e2e8f0 37%, #eef2f7 50%);
+  background-size: 840px 100%;
+  border-radius: $border-radius-sm;
+  animation: sp-shimmer 1.4s linear infinite;
+}
+
+/** 载入中转圈 */
+.u-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(59, 130, 246, 0.25);
+  border-top-color: $accent-color;
+  border-radius: 50%;
+  animation: sp-spin 0.7s linear infinite;
+}
+
+/** 视觉隐藏但保留给屏幕阅读器 */
+.u-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/** 主内容区容器：统一最大宽度与居中，避免超宽屏内容被拉散 */
+.u-container {
+  width: 100%;
+  max-width: $content-max-width;
+  margin: 0 auto;
+}
+
+// ---------------------------------------------------------------------------
+// 6. 内容区宽度统一 + 居中
+//
+// 两级制，避免页面之间出现宽度差异与"跳跃感"：
+//   · 内容型页面（列表 / 详情 / 表单 / 设置）→ 1200px
+//   · 画布型页面（3D 可视化等需宽幅展示）    → 1440px
+//
+// 各视图内部不要再各写一套 max-width：scoped 样式优先级更高，会覆盖这里。
+// 新增页面时，把它的主内容类名加进对应列表即可。
+// ---------------------------------------------------------------------------
+.db__main,
+.pc__main,
+.rs__main,
+.tg__main,
+.tk__main,
+.profile__content,
+.result-detail__content,
+.task-detail__content {
+  width: 100%;
+  max-width: $content-max-width-narrow;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.visualization__content {
+  width: 100%;
+  max-width: $content-max-width;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+// 尊重用户的"减少动效"系统偏好
+@media (prefers-reduced-motion: reduce) {
+  .u-fade-up,
+  .u-skeleton,
+  .u-spinner {
+    animation: none;
+  }
+}

@@ -1,4 +1,3 @@
-
 <template>
   <div class="visualization">
 
@@ -23,8 +22,66 @@
 
       </header>
 
+      <!-- 极简上下文：明确当前展示的是哪条靶点的结构 -->
+      <div class="visualization__context">
+        <span class="visualization__context-item">
+          <span class="visualization__context-label">靶点</span>
+          <b class="visualization__context-value">{{ targetName }}</b>
+        </span>
+
+        <span class="visualization__context-item">
+          <span class="visualization__context-label">ID</span>
+          <b class="visualization__context-value visualization__context-value--mono">
+            {{ targetId || '—' }}
+          </b>
+        </span>
+
+        <span class="visualization__context-item">
+          <span class="visualization__context-label">PDB</span>
+          <b class="visualization__context-value visualization__context-value--mono">
+            {{ resolvedPdbId || '未匹配到结构' }}
+          </b>
+        </span>
+
+        <span class="visualization__context-item">
+          <span class="visualization__context-label">置信度</span>
+          <StatusTag
+            kind="confidence"
+            :value="confidenceLevel"
+            :score="confidenceScore"
+          />
+        </span>
+
+        <span
+          v-if="bindingAffinity !== null"
+          class="visualization__context-item"
+        >
+          <span class="visualization__context-label">亲和力</span>
+          <b class="visualization__context-value">
+            {{ bindingAffinity.toFixed(2) }} kcal/mol
+          </b>
+        </span>
+
+        <span
+          v-if="resultLoading"
+          class="visualization__context-hint"
+        >
+          预测结果加载中…
+        </span>
+        <span
+          v-else-if="resultError"
+          class="visualization__context-hint visualization__context-hint--error"
+          :title="resultError"
+        >
+          预测结果加载失败，已使用兜底数据
+        </span>
+      </div>
+
       <!-- Main -->
-      <section class="visualization__main">
+      <section
+        class="visualization__main"
+        :class="{ 'visualization__main--collapsed': !controlsOpen }"
+      >
 
         <!-- =========================
              Viewer
@@ -111,9 +168,32 @@
 
         <!-- =========================
              Controls
+             默认收起；收起后的把手贴在画布右侧（即该栏原来的位置），点击展开
         ========================== -->
 
-        <div class="visualization__controls">
+        <button
+          v-show="!controlsOpen"
+          class="visualization__side-handle"
+          type="button"
+          title="展开显示控制"
+          @click="controlsOpen = true"
+        >
+          <span class="visualization__side-handle-icon">⚙</span>
+          <span class="visualization__side-handle-text">显示控制</span>
+        </button>
+
+        <div v-show="controlsOpen" class="visualization__controls">
+
+          <header class="visualization__controls-head">
+            <h3 class="visualization__controls-heading">显示控制</h3>
+            <button
+              class="visualization__controls-collapse"
+              type="button"
+              @click="controlsOpen = false"
+            >
+              收起 ›
+            </button>
+          </header>
 
           <!-- Display -->
           <div class="visualization__control-section">
@@ -278,122 +358,6 @@
 
       <section class="visualization__info">
 
-        <!-- Structure -->
-        <div class="visualization__info-card">
-
-          <h3 class="visualization__info-title">
-
-            <span class="visualization__info-title-icon">
-              📋
-            </span>
-
-            结构信息
-
-          </h3>
-
-          <div
-            v-if="resultLoading"
-            class="visualization__info-hint"
-          >
-            预测结果加载中…
-          </div>
-
-          <div
-            v-else-if="resultError"
-            class="visualization__info-hint visualization__info-hint--error"
-            :title="resultError"
-          >
-            预测结果加载失败，已显示兜底数据
-          </div>
-
-          <div class="visualization__info-content">
-
-            <div class="visualization__info-row">
-
-              <span class="visualization__info-label">
-                靶点名称
-              </span>
-
-              <span class="visualization__info-value">
-                {{ targetName }}
-              </span>
-
-            </div>
-
-            <div class="visualization__info-row">
-
-              <span class="visualization__info-label">
-                靶点ID
-              </span>
-
-              <span
-                class="visualization__info-value visualization__info-value--mono"
-              >
-                {{ targetId }}
-              </span>
-
-            </div>
-
-            <div class="visualization__info-row">
-
-              <span class="visualization__info-label">
-                结合亲和力
-              </span>
-
-              <span
-                class="visualization__info-value visualization__info-value--highlight"
-              >
-                {{
-                  bindingAffinity !== null
-                    ? bindingAffinity.toFixed(2) + ' kcal/mol'
-                    : 'N/A'
-                }}
-              </span>
-
-            </div>
-
-            <div class="visualization__info-row">
-
-              <span class="visualization__info-label">
-                置信度
-              </span>
-
-              <span
-                class="visualization__info-value"
-
-                :style="{
-                  color: getConfidenceColor(confidenceScore)
-                }"
-              >
-
-                {{
-                  Math.round(
-                    confidenceScore * 100
-                  )
-                }}%
-
-                ({{ getConfidenceText(confidenceLevel) }})
-
-              </span>
-
-            </div>
-
-            <div class="visualization__info-row">
-
-              <span class="visualization__info-label">
-                相互作用数
-              </span>
-
-              <span class="visualization__info-value">
-                {{ interactionCount }}
-              </span>
-
-            </div>
-
-          </div>
-
-        </div>
-
         <!-- Interactions -->
         <div
           v-if="interactions.length"
@@ -407,6 +371,10 @@
             </span>
 
             相互作用详情
+
+            <span class="visualization__info-count">
+              {{ interactionCount }}
+            </span>
 
           </h3>
 
@@ -484,6 +452,8 @@ import type { PredictionResult } from '@/types'
 import Sidebar from '@/components/Sidebar.vue'
 
 import MolstarViewer from '@/components/protein/MolstarViewer.vue'
+
+import StatusTag from '@/components/ui/StatusTag.vue'
 
 
 /* =========================================================
@@ -828,6 +798,10 @@ const interactionCount = computed(() => {
 const displayMode =
   ref('cartoon')
 
+/** 右侧显示控制栏是否展开；默认收起，把宽度让给 3D 画布 */
+const controlsOpen =
+  ref(false)
+
 const colorScheme =
   ref('chain')
 
@@ -1105,42 +1079,6 @@ async function exportImage(): Promise<void> {
 
 
 /* =========================================================
- * Confidence
- * ========================================================= */
-
-const getConfidenceColor =
-  (score: number): string => {
-
-    if (score >= 0.8) {
-      return '#10b981'
-    }
-
-    if (score >= 0.6) {
-      return '#f59e0b'
-    }
-
-    return '#ef4444'
-  }
-
-
-const getConfidenceText =
-  (level: string): string => {
-
-    const texts: Record<string, string> = {
-
-      high: '高',
-
-      medium: '中',
-
-      low: '低',
-
-    }
-
-    return texts[level] || level
-  }
-
-
-/* =========================================================
  * Interaction
  * ========================================================= */
 
@@ -1239,11 +1177,152 @@ const getInteractionTypeName =
   display: grid;
 
   grid-template-columns:
-    3fr 1fr;
+    minmax(0, 3fr) minmax(0, 1fr);
 
   gap: $spacing-md;
 
   margin-bottom: $spacing-lg;
+}
+
+// 控制栏收起时，右侧只保留一条窄把手，宽度让给 3D 画布
+.visualization__main--collapsed {
+  grid-template-columns:
+    minmax(0, 1fr) auto;
+}
+
+/* =========================================================
+ * Context（画布上方的极简上下文：当前展示的是谁的结构）
+ * ========================================================= */
+
+.visualization__context {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: $spacing-sm $spacing-lg;
+
+  margin-bottom: $spacing-md;
+  padding: $spacing-sm $spacing-md;
+
+  background: $color-surface;
+  border: 1px solid $color-border;
+  border-radius: $radius-control;
+}
+
+.visualization__context-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.visualization__context-label {
+  font-size: $font-size-xs;
+  color: $color-text-faint;
+}
+
+.visualization__context-value {
+  font-size: $font-size-sm;
+  font-weight: $font-weight-medium;
+  color: $color-text;
+
+  &--mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: $font-size-xs;
+  }
+}
+
+.visualization__context-hint {
+  font-size: $font-size-xs;
+  color: $color-text-faint;
+
+  &--error {
+    color: $error-color;
+  }
+}
+
+/* =========================================================
+ * Side handle（控制栏收起后的展开把手）
+ * ========================================================= */
+
+.visualization__side-handle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: $spacing-md;
+
+  width: 44px;
+  padding: $spacing-lg 0;
+
+  background: $color-surface;
+  border: 1px solid $color-border;
+  border-radius: $radius-control;
+  cursor: pointer;
+
+  transition:
+    border-color 0.18s $ease-out,
+    background 0.18s $ease-out;
+
+  &:hover {
+    border-color: rgba(59, 130, 246, 0.4);
+    background: $color-brand-softer;
+  }
+}
+
+.visualization__side-handle-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.visualization__side-handle-text {
+  font-size: $font-size-xs;
+  color: $color-text-soft;
+  letter-spacing: 2px;
+  // 竖排文字：窄条里比横排易读
+  writing-mode: vertical-rl;
+}
+
+/* =========================================================
+ * Controls head（控制栏标题 + 收起按钮）
+ * ========================================================= */
+
+.visualization__controls-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-sm;
+
+  padding-bottom: $spacing-sm;
+  margin-bottom: $spacing-md;
+  border-bottom: 1px solid $color-border-soft;
+}
+
+.visualization__controls-heading {
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+  color: $color-text;
+}
+
+.visualization__controls-collapse {
+  padding: 2px 8px;
+
+  background: transparent;
+  border: none;
+  border-radius: $border-radius-sm;
+  cursor: pointer;
+
+  font-size: $font-size-xs;
+  font-family: inherit;
+  color: $color-text-faint;
+
+  transition:
+    color 0.18s $ease-out,
+    background 0.18s $ease-out;
+
+  &:hover {
+    color: $color-brand;
+    background: $color-brand-soft;
+  }
 }
 
 .visualization__canvas {
@@ -1363,6 +1442,24 @@ const getInteractionTypeName =
   &--active {
     background: rgba($primary-color, 0.08); color: $primary-color; border-color: rgba($primary-color, 0.12);
   }
+}
+
+// 相互作用详情标题右侧的条数徽标
+.visualization__info-count {
+  display: inline-block;
+
+  min-width: 18px;
+  padding: 0 6px;
+  margin-left: 6px;
+
+  background: $color-brand-soft;
+  border-radius: $radius-pill;
+
+  font-size: $font-size-xs;
+  font-weight: $font-weight-medium;
+  line-height: 18px;
+  text-align: center;
+  color: $color-brand;
 }
 
 
@@ -1493,7 +1590,7 @@ const getInteractionTypeName =
   display: grid;
 
   grid-template-columns:
-    1fr 1fr;
+    minmax(0, 1fr);
 
   gap: $spacing-md;
 }

@@ -120,11 +120,13 @@ console.log('ResultDetail加载了')
   display: flex;
   min-height: 100vh;
   background: $bg-secondary;
+  // 顶栏为 fixed 定位（高 $header-height），外层需留出等高上边距，否则内容被顶栏遮住
+  padding-top: $header-height;
 }
 
 .result-detail__content {
   flex: 1;
-  margin-left: $sidebar-width;
+  // 顶栏是全宽 fixed 的，不存在左侧栏；原先的 margin-left: $sidebar-width 是旧版侧边栏的残留
   padding: $spacing-lg $spacing-xl;
 }
 

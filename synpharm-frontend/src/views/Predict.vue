@@ -1658,10 +1658,10 @@ const goHistoryVisualization = (item: PredictResultResponse) => {
   padding-top: $header-height;
 }
 
+// 宽度与居中由 styles/base.scss 的全局规则统一提供
 .pc__main {
   flex: 1;
   padding: $spacing-xl;
-  max-width: 1080px;
 }
 
 /* ---------- 页头 ---------- */

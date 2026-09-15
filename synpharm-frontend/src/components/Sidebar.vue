@@ -5,21 +5,20 @@
       <span class="topbar__name">SynPharm</span>
     </div>
 
-    <div class="topbar__nav">
-      <el-select
-        class="topbar__select"
-        :model-value="currentPath"
-        placeholder="选择栏目"
-        @change="navigateTo"
+    <!-- 一级导航：横向平铺，当前栏目高亮（不再用下拉框，避免栏目被藏起来） -->
+    <nav class="topbar__nav" aria-label="主导航">
+      <router-link
+        v-for="item in navItems"
+        :key="item.path"
+        :to="item.path"
+        class="topbar__link"
+        :class="{ 'topbar__link--active': isActive(item) }"
+        :title="item.label"
       >
-        <el-option
-          v-for="item in navItems"
-          :key="item.path"
-          :value="item.path"
-          :label="item.icon + ' ' + item.label"
-        />
-      </el-select>
-    </div>
+        <span class="topbar__link-icon">{{ item.icon }}</span>
+        <span class="topbar__link-label">{{ item.label }}</span>
+      </router-link>
+    </nav>
 
     <div class="topbar__user">
       <span class="topbar__avatar">{{ avatarText }}</span>
@@ -41,26 +40,35 @@ const authStore = useAuthStore()
 const router = useRouter()
 const route = useRoute()
 
-const navItems = [
-  { path: '/dashboard', label: '仪表盘', icon: '📊' },
-  { path: '/predict', label: '预测中心', icon: '🎯' },
-  { path: '/results', label: '预测结果', icon: '📈' },
-  { path: '/tasks', label: '任务管理', icon: '📋' },
-  { path: '/targets', label: '靶点库', icon: '🧪' },
-  { path: '/visualization', label: '3D可视化', icon: '🧫' },
-  { path: '/profile', label: '个人中心', icon: '👤' }
+interface NavItem {
+  path: string
+  label: string
+  icon: string
+  /** 用于高亮的路径前缀，可多个（详情页需点亮其所属一级栏目） */
+  match: string[]
+}
+
+const navItems: NavItem[] = [
+  { path: '/dashboard', label: '仪表盘', icon: '📊', match: ['/dashboard'] },
+  { path: '/predict', label: '预测中心', icon: '🎯', match: ['/predict'] },
+  { path: '/results', label: '预测结果', icon: '📈', match: ['/results', '/result'] },
+  { path: '/tasks', label: '任务管理', icon: '📋', match: ['/tasks'] },
+  { path: '/targets', label: '靶点库', icon: '🧪', match: ['/targets'] },
+  { path: '/visualization', label: '3D可视化', icon: '🧫', match: ['/visualization'] },
+  { path: '/profile', label: '个人中心', icon: '👤', match: ['/profile'] }
 ]
 
-const currentPath = computed(() => route.path)
+/**
+ * 判断某项是否为当前栏目。
+ * 注意：结果列表是 /results，而结果详情是 /result/:id（单数），需分别匹配才会正确点亮。
+ */
+const isActive = (item: NavItem): boolean =>
+  item.match.some((prefix) => route.path === prefix || route.path.startsWith(prefix + '/'))
 
 const avatarText = computed(() => {
   if (!authStore.userNickname) return '👤'
   return authStore.userNickname.charAt(0).toUpperCase()
 })
-
-const navigateTo = (path: string) => {
-  router.push(path)
-}
 
 const handleLogout = () => {
   authStore.logout()
@@ -99,21 +107,46 @@ const handleLogout = () => {
   flex: 1;
   display: flex;
   align-items: center;
+  gap: $spacing-xs;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
 }
 
-.topbar__select {
-  width: 240px;
-  :deep(.el-select__wrapper) {
-    background: rgba(255, 255, 255, 0.1);
-    box-shadow: none;
-    border-radius: $border-radius-md;
-  }
-  :deep(.el-select__placeholder),
-  :deep(.el-select__selected-item) {
+.topbar__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 $spacing-md;
+  border-radius: $border-radius-md;
+  color: rgba(255, 255, 255, 0.66);
+  font-size: $font-size-sm;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: $transition-fast;
+
+  &:hover {
     color: #fff;
-    font-size: $font-size-sm;
+    background: rgba(255, 255, 255, 0.08);
   }
-  :deep(.el-select__caret) { color: rgba(255, 255, 255, 0.7); }
+
+  // 当前栏目：蓝色底 + 内描边，比单纯变色更容易扫视
+  &--active {
+    color: #fff;
+    font-weight: 500;
+    background: rgba(59, 130, 246, 0.22);
+    box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.35);
+  }
+}
+
+.topbar__link-icon { font-size: 14px; line-height: 1; }
+
+// 窄屏放不下 7 项时只留图标，名称通过 title 悬浮查看
+@media (max-width: 1200px) {
+  .topbar__link { padding: 0 $spacing-sm; }
+  .topbar__link-label { display: none; }
 }
 
 .topbar__user {

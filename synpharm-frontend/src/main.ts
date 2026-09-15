@@ -2,6 +2,8 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
+// 全局基础层：必须放在 element-plus 样式之后，才能覆盖其主题变量
+import '@/styles/base.scss'
 import App from './App.vue'
 import router from './router'
 import { useAuthStore } from './stores/auth'

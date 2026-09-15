@@ -137,10 +137,10 @@ const formatDate = (dateString?: string): string => {
   padding-top: $header-height;
 }
 
+// 宽度与居中由 styles/base.scss 的全局规则统一提供
 .task-detail__content {
   flex: 1;
   padding: $spacing-xl;
-  max-width: 860px;
 }
 
 .task-detail__back {

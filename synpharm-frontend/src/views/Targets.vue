@@ -396,10 +396,10 @@ const useTarget = (target: Target) => {
   padding-top: $header-height;
 }
 
+// 宽度与居中由 styles/base.scss 的全局规则统一提供
 .tg__main {
   flex: 1;
   padding: $spacing-lg $spacing-xl;
-  max-width: 1160px;
 }
 
 .tg__header {

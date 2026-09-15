@@ -63,3 +63,52 @@ $z-dropdown: 100;
 $z-sticky: 200;
 $z-modal: 300;
 $z-toast: 400;
+
+// ===========================================================================
+// 以下为语义层 Token
+// 约定：页面与组件优先引用语义名（$color-surface 等），不要直接写原始色值，
+//       这样后续统一调整主题时只需改本文件。
+// ===========================================================================
+
+// ---- 字重 ----
+$font-weight-normal: 400;
+$font-weight-medium: 500;
+$font-weight-semibold: 600;
+$font-weight-bold: 700;
+
+// ---- 颜色语义 ----
+$color-brand: $accent-color;
+$color-brand-strong: #2563eb;
+$color-brand-soft: rgba(59, 130, 246, 0.12);
+$color-brand-softer: rgba(59, 130, 246, 0.06);
+
+$color-canvas: $bg-secondary; // 页面底色
+$color-surface: $bg-primary; // 卡片/面板底色
+$color-surface-alt: $bg-secondary;
+$color-surface-sunken: $bg-tertiary;
+
+$color-border: $border-color;
+$color-border-soft: $border-light;
+
+$color-text: $text-primary;
+$color-text-soft: $text-secondary;
+$color-text-faint: $text-muted;
+
+// ---- 圆角 / 阴影语义 ----
+$radius-card: $border-radius-lg;
+$radius-control: $border-radius-md;
+$radius-pill: 999px;
+
+$shadow-card: $shadow-md;
+$shadow-card-hover: $shadow-lg;
+$shadow-focus: 0 0 0 3px rgba(59, 130, 246, 0.18);
+
+// ---- 动效曲线 ----
+$ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+$ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
+// ---- 内容区宽度（两级制）----
+// 画布型页面（3D 可视化等需要宽幅展示）：1440px
+$content-max-width: 1440px;
+// 内容型页面（列表 / 详情 / 表单 / 设置）：1200px，阅读宽度更舒适
+$content-max-width-narrow: 1200px;
