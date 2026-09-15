@@ -81,8 +81,14 @@ public class EmailCaptchaServiceImpl implements CaptchaService {
      * @param target 目标邮箱
      * @param type   验证码类型（login/register/reset等）
      */
-    /** 允许的验证码类型 */
-    private static final Set<String> ALLOWED_TYPES = Set.of("login", "register", "reset");
+    /**
+     * 允许的验证码类型。
+     *
+     * <p>bind / change_email 供个人中心「绑定邮箱 / 换绑邮箱」使用，
+     * 需与 UserServiceImpl 中的 CAPTCHA_TYPE_* 常量保持一致。
+     */
+    private static final Set<String> ALLOWED_TYPES =
+            Set.of("login", "register", "reset", "bind", "change_email");
 
     @Override
     public SendCaptchaResult sendCaptcha(String target, String type) {

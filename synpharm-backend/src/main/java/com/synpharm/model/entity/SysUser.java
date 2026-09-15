@@ -58,6 +58,18 @@ public class SysUser {
     /** 注册方式（qq_email/phone/wechat） */
     private String registerType;
 
+    /** 机构/单位（科研档案） */
+    private String institution;
+
+    /** 实验室/课题组（科研档案） */
+    private String lab;
+
+    /** ORCID iD（形如 0000-0002-1825-0097，生物信息领域研究者标识） */
+    private String orcid;
+
+    /** 研究方向（科研档案） */
+    private String researchArea;
+
     /** 创建时间（自动填充） */
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;

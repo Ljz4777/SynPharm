@@ -37,6 +37,21 @@ public class UserResponse {
     /** 注册方式 */
     private String registerType;
 
+    /** 邮箱验证状态：0未验证，1已验证 */
+    private Integer emailVerified;
+
+    /** 机构/单位（科研档案） */
+    private String institution;
+
+    /** 实验室/课题组（科研档案） */
+    private String lab;
+
+    /** ORCID iD（形如 0000-0002-1825-0097） */
+    private String orcid;
+
+    /** 研究方向（科研档案） */
+    private String researchArea;
+
     /**
      * 从实体对象转换为响应DTO
      *
@@ -52,6 +67,11 @@ public class UserResponse {
                 .role(user.getRole())
                 .status(user.getStatus())
                 .registerType(user.getRegisterType())
+                .emailVerified(user.getEmailVerified())
+                .institution(user.getInstitution())
+                .lab(user.getLab())
+                .orcid(user.getOrcid())
+                .researchArea(user.getResearchArea())
                 .build();
     }
 }

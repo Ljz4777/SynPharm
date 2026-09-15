@@ -1,5 +1,6 @@
 package com.synpharm.api;
 
+import com.synpharm.dto.response.LoginLogResponse;
 import com.synpharm.dto.response.UserResponse;
 import com.synpharm.service.UserService;
 import com.synpharm.utils.Result;
@@ -7,6 +8,8 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 /**
  * 用户控制器
@@ -93,5 +96,65 @@ public class UserController {
             @RequestParam String password) {
         userService.deleteAccount(token, password);
         return Result.success();
+    }
+
+    /**
+     * 绑定邮箱接口
+     *
+     * <p>用于账号尚未绑定邮箱的场景。验证码需先通过
+     * {@code POST /api/auth/captcha/send}（type=bind）发送到待绑定的邮箱。
+     *
+     * @param token JWT令牌（Bearer格式）
+     * @param email 待绑定的邮箱
+     * @param code  该邮箱收到的验证码
+     * @return 更新后的用户信息
+     */
+    @PostMapping("/email")
+    @Operation(summary = "绑定邮箱", description = "首次绑定邮箱，需校验新邮箱收到的验证码")
+    public Result<UserResponse> bindEmail(
+            @RequestHeader("Authorization") String token,
+            @RequestParam String email,
+            @RequestParam String code) {
+        return Result.success(userService.bindEmail(token, email, code));
+    }
+
+    /**
+     * 换绑邮箱接口
+     *
+     * <p>需同时校验当前密码与新邮箱验证码：只校验验证码不足以防止
+     * 「账号被盗后直接换绑邮箱进而接管账号」。
+     *
+     * @param token           JWT令牌（Bearer格式）
+     * @param newEmail        新邮箱
+     * @param code            新邮箱收到的验证码
+     * @param currentPassword 当前密码
+     * @return 更新后的用户信息
+     */
+    @PutMapping("/email")
+    @Operation(summary = "换绑邮箱", description = "更换已绑定邮箱，需校验当前密码与新邮箱验证码")
+    public Result<UserResponse> changeEmail(
+            @RequestHeader("Authorization") String token,
+            @RequestParam String newEmail,
+            @RequestParam String code,
+            @RequestParam String currentPassword) {
+        return Result.success(userService.changeEmail(token, newEmail, code, currentPassword));
+    }
+
+    /**
+     * 登录记录接口
+     *
+     * <p>读取 sys_login_log 中当前用户的登录历史，用于安全审计。
+     * 仅查询，不含「踢出会话」能力（那需要会话管理，见技术方案文档）。
+     *
+     * @param token JWT令牌（Bearer格式）
+     * @param limit 返回条数上限，默认 20，最大 100
+     * @return 登录记录列表（按时间倒序）
+     */
+    @GetMapping("/login-logs")
+    @Operation(summary = "登录记录", description = "查询当前用户的登录历史，用于安全审计")
+    public Result<List<LoginLogResponse>> getLoginLogs(
+            @RequestHeader("Authorization") String token,
+            @RequestParam(defaultValue = "20") int limit) {
+        return Result.success(userService.getLoginLogs(token, limit));
     }
 }

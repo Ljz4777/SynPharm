@@ -1,7 +1,10 @@
 package com.synpharm.service;
 
+import com.synpharm.dto.response.LoginLogResponse;
 import com.synpharm.dto.response.UserResponse;
 import com.synpharm.model.entity.SysUser;
+
+import java.util.List;
 
 /**
  * 用户服务接口
@@ -88,4 +91,38 @@ public interface UserService {
      * @param password 用户密码
      */
     void deleteAccount(String token, String password);
+
+    /**
+     * 绑定邮箱（账号当前未绑定邮箱时使用）
+     *
+     * <p>验证码发往待绑定的新邮箱，校验通过后置 email_verified=1。
+     *
+     * @param token JWT令牌
+     * @param email 待绑定的邮箱
+     * @param code  发往该邮箱的验证码
+     * @return 更新后的用户响应
+     */
+    UserResponse bindEmail(String token, String email, String code);
+
+    /**
+     * 换绑邮箱
+     *
+     * <p>需同时校验当前密码与新邮箱验证码，防止账号被盗后直接换绑。
+     *
+     * @param token           JWT令牌
+     * @param newEmail        新邮箱
+     * @param code            发往新邮箱的验证码
+     * @param currentPassword 当前密码
+     * @return 更新后的用户响应
+     */
+    UserResponse changeEmail(String token, String newEmail, String code, String currentPassword);
+
+    /**
+     * 查询当前用户的登录记录
+     *
+     * @param token JWT令牌
+     * @param limit 返回条数上限
+     * @return 登录记录列表（按时间倒序）
+     */
+    List<LoginLogResponse> getLoginLogs(String token, int limit);
 }
