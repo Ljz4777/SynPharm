@@ -10,7 +10,32 @@ export interface UserDTO {
   role?: string
   status?: number
   registerType?: string
+  emailVerified?: number
+  institution?: string
+  lab?: string
+  orcid?: string
+  researchArea?: string
   createdAt?: string
+}
+
+/** 科研档案更新载荷（后端 PUT /api/users/profile 同样接收这组字段） */
+export interface ResearchProfile {
+  institution?: string
+  lab?: string
+  orcid?: string
+  researchArea?: string
+}
+
+/** 登录记录（对应后端 LoginLogResponse） */
+export interface LoginLogItem {
+  account: string
+  loginType: string
+  loginIp?: string
+  loginLocation?: string
+  userAgent?: string
+  success: boolean
+  failReason?: string
+  createdAt: string
 }
 
 /** 后端登录/注册响应（字段与 LoginResponse 对应） */
@@ -47,6 +72,17 @@ export const authApi = {
     return request.get<User>('/api/users/profile')
   },
 
+  /**
+   * 完整用户档案。
+   *
+   * 与 getProfile 命中同一接口，但返回未裁剪的 UserDTO：
+   * store 里的 normalizeUser 只保留 id/email/nickname/avatar/createdAt，
+   * 个人中心需要的 emailVerified 与科研档案字段必须走这里取。
+   */
+  getFullProfile(): Promise<UserDTO> {
+    return request.get<UserDTO>('/api/users/profile')
+  },
+
   updateProfile(data: Partial<User>): Promise<User> {
     return request.put<User>('/api/users/profile', data)
   },
@@ -63,11 +99,33 @@ export const authApi = {
     })
   },
 
-  sendCaptcha(email: string, type: 'login' | 'register' | 'reset'): Promise<SendCaptchaResponse> {
+  sendCaptcha(email: string, type: 'login' | 'register' | 'reset' | 'bind' | 'change_email'): Promise<SendCaptchaResponse> {
     return request.post<SendCaptchaResponse>('/api/auth/captcha/send', { email, type })
   },
 
   resetPassword(email: string, captcha: string, newPassword: string): Promise<void> {
     return request.post<void>('/api/auth/password/reset', { email, captcha, newPassword })
+  },
+
+  /** 更新科研档案（机构/实验室/ORCID/研究方向）；后端按一组整体覆盖 */
+  updateResearchProfile(data: ResearchProfile): Promise<UserDTO> {
+    return request.put<UserDTO>('/api/users/profile', data)
+  },
+
+  /** 首次绑定邮箱：验证码发往待绑定的新邮箱 */
+  bindEmail(email: string, code: string): Promise<UserDTO> {
+    return request.post<UserDTO>('/api/users/email', null, { params: { email, code } })
+  },
+
+  /** 换绑邮箱：需同时提供当前密码与新邮箱验证码 */
+  changeEmail(newEmail: string, code: string, currentPassword: string): Promise<UserDTO> {
+    return request.put<UserDTO>('/api/users/email', null, {
+      params: { newEmail, code, currentPassword }
+    })
+  },
+
+  /** 登录记录（仅查询，不含踢出会话） */
+  getLoginLogs(limit = 20): Promise<LoginLogItem[]> {
+    return request.get<LoginLogItem[]>('/api/users/login-logs', { params: { limit } })
   }
 }
