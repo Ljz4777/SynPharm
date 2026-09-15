@@ -81,8 +81,6 @@ knife4j:
     language: zh_cn
 
 logging:
-  # 调用算法引擎的 API Key（与 FASTAPI_API_KEYS 对应；留空则不携带）
-  api-key: ${FASTAPI_API_KEY:}
   level:
     com.synpharm: debug
     com.baomidou.mybatisplus: info
@@ -93,6 +91,8 @@ file:
 
 fastapi:
   base-url: ${FASTAPI_URL:http://fastapi:8000}
+  # 调用算法引擎的 API Key（与 FASTAPI_API_KEYS 对应；留空则不携带）
+  api-key: ${FASTAPI_API_KEY:}
   timeout-single: ${FASTAPI_TIMEOUT_SINGLE:30000}
   timeout-batch: ${FASTAPI_TIMEOUT_BATCH:60000}
 
