@@ -14,6 +14,13 @@
 *.css text eol=lf
 *.scss text eol=lf
 
+# 脚本换行：shell 脚本必须 LF，否则 Linux/WSL/macOS 下会因行尾 \r 报
+# "bash: $'\r': command not found"；Windows 脚本保持 CRLF
+*.sh  text eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
 # 二进制文件不处理
 *.png binary
 *.jpg binary
