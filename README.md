@@ -134,7 +134,8 @@ SynPharm/
 │
 ├── deploy/                        # 部署
 │   ├── docker-compose.yml         # 6 服务编排（mysql/redis/rabbitmq/backend/fastapi/frontend）
-│   ├── .env.example               # 环境变量模板（复制为 .env）
+│   ├── .env.example               # 环境变量模板（start.bat 首次自动复制为 .env）
+│   ├── 环境配置说明.md            # 环境配置、一键启动与排障
 │   └── scripts/                   # 一键启停脚本（start/stop）
 │
 └── docs/                          # 技术文档（架构/部署/接口/模块）
@@ -150,21 +151,32 @@ SynPharm/
 
 ```bash
 cd deploy
-cp .env.example .env          # 复制环境变量模板
-# 编辑 .env：必填 MYSQL_ROOT_PASSWORD、MYSQL_PASSWORD、JWT_SECRET、RABBITMQ_PASSWORD
-docker compose up -d --build
+
+# Windows：直接双击，或在终端执行
+scripts\start.bat
+
+# Linux / macOS / WSL
+./scripts/start.sh
 ```
+
+**无需手动创建 `.env`。** 脚本会自动定位 `docker` 命令、按需拉起 Docker Desktop、
+创建并修复 `.env`（只补空值和 `change-me*` 占位值，不覆盖你设过的密码），然后校验并启动。
+
+首次启动需 10~30 分钟构建镜像（拉基础镜像 + Maven 编译 + 装 torch，约 2~3 GB），之后为十几秒。
 
 启动后访问：
 
 | 服务 | 地址 | 说明 |
 | :--- | :--- | :--- |
 | 前端 | http://localhost | 主站点（端口默认 80，`.env` 可改） |
-| 后端 API / Knife4j | http://localhost:8080 | `http://localhost:8080/doc.html` |
-| FastAPI | http://localhost:8000 | `http://localhost:8000/docs` |
+| 后端 API / Knife4j | http://localhost:7000 | `http://localhost:7000/doc.html` |
+| FastAPI | http://localhost:9050 | `http://localhost:9050/docs` |
 | RabbitMQ 管理台 | http://localhost:15672 | 仅内网/本机，账号见 `.env` |
 
 > 端口均通过 `deploy/.env` 的 `*_PORT` 变量配置；数据库首次启动自动执行 `sql/` 初始化脚本。
+>
+> ⚠️ **不要把 `.env.example` 复制覆盖到已有的 `.env`** —— 数据卷里的密码是容器首次初始化时
+> 写死的，覆盖后密码对不上，之后每次启动都会失败。详见 [`deploy/环境配置说明.md`](deploy/环境配置说明.md)。
 
 ### 方式二：本地开发（可选）
 
@@ -307,14 +319,17 @@ npm run dev   # http://localhost:5173
 
 ```bash
 cd deploy
-cp .env.example .env        # 配置密码 / 密钥 / RabbitMQ
-docker compose up -d --build
+scripts\start.bat            # Windows；Linux/macOS/WSL 用 ./scripts/start.sh
 
-# 查看状态（6 个服务全部 healthy）
-docker compose ps
+docker compose ps            # 查看状态（6 个服务全部 healthy）
 ```
 
-> 改动代码后重建：`docker compose build backend|frontend` 再 `docker compose up -d`。生产部署前请阅读 [上线流程详细版](docs/deploy/上线流程详细版.md)。
+`start.bat` 会自动定位 `docker`、按需拉起 Docker Desktop、创建并修复 `.env`，
+并且**在镜像已存在时跳过构建**（日常启动十几秒完成）。
+
+> 改动代码后重建：`scripts\start.bat rebuild`。
+> 排障请看 [`deploy/环境配置说明.md`](deploy/环境配置说明.md) 的“启动失败的三大真实原因”。
+> 生产部署前请阅读 [上线流程详细版](docs/deploy/上线流程详细版.md)。
 
 ### 传统部署（本地）
 

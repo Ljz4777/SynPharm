@@ -131,50 +131,56 @@ cd SynPharm/deploy
 
 ## 5. 快速开始
 
-### 5.1 配置环境变量
+### 5.1 启动
 
 ```bash
-# Windows
-copy .env.example .env
+cd deploy
 
-# Linux / macOS / WSL
-cp .env.example .env
-```
-
-编辑 `.env`，**至少修改**以下安全关键项：
-
-```ini
-MYSQL_ROOT_PASSWORD=你的强密码
-MYSQL_PASSWORD=你的强密码
-JWT_SECRET=至少32字节随机串   # 生成: openssl rand -hex 32
-```
-
-> ⚠️ `.env` 已在 `.gitignore` 中，**严禁提交到版本库**。
-
-### 5.2 一键启动
-
-```bash
-# Windows
+# Windows：直接双击，或在终端执行
 scripts\start.bat
 
 # Linux / macOS / WSL
 chmod +x scripts/start.sh && ./scripts/start.sh
 ```
 
-首次启动会自动构建 3 个业务镜像（前端/后端/FastAPI），后端与 FastAPI 构建因需拉取依赖约 10~30 分钟；之后启动为秒级。RabbitMQ 使用官方镜像（无需构建），随 compose 一起启动。
+**无需手动创建 `.env`。** `start.bat` 会自动：
+
+- 定位 `docker` 命令（PATH 未刷新的旧终端也能用）
+- 未运行时拉起 Docker Desktop 并等待就绪
+- 创建并修复 `.env`：**只补空值和 `change-me*` 占位值，不会覆盖你自己设过的密码**
+- 端口预检 → 校验配置 → 启动（已有容器时跳过端口检查）
+
+### 5.2 耗时
+
+| 场景 | 耗时 |
+|---|---|
+| 首次（无镜像） | 10~30 分钟：拉基础镜像 + Maven 编译 + 装 torch（约 2~3 GB） |
+| 之后（镜像已存在） | 十几秒：跳过构建，只 `up -d` |
+
+RabbitMQ / MySQL / Redis 使用官方镜像（无需构建），随 compose 一起启动。
+
+改了源码需要重建时，执行：
+
+```bash
+scripts\start.bat rebuild
+```
+
+> ⚠️ **不要把 `.env.example` 复制覆盖到已有的 `.env` 上**：数据卷里的密码是首次初始化时写死的，
+> 覆盖后密码对不上，之后所有启动都会失败。详见 `deploy/环境配置说明.md` 的
+> “启动失败的三大真实原因”。
 
 ### 5.3 验证
 
 ```bash
-docker compose ps                      # 全部 healthy
-curl http://localhost:8080/actuator/health   # {"status":"UP"}
-curl http://localhost:8000/health             # {"status":"healthy"}
+docker compose ps                            # 全部 healthy
+curl http://localhost:7000/actuator/health   # {"status":"UP"}
+curl http://localhost:9050/health/           # {"status":"healthy"}
 ```
 
 访问：
 - 前端：http://localhost
-- 后端文档：http://localhost:8080/doc.html
-- FastAPI 文档：http://localhost:8000/docs
+- 后端文档：http://localhost:7000/doc.html
+- FastAPI 文档：http://localhost:9050/docs
 
 ---
 
@@ -186,8 +192,8 @@ curl http://localhost:8000/health             # {"status":"healthy"}
 | `MYSQL_ROOT_PASSWORD` | - | **必填**，MySQL root 密码 |
 | `MYSQL_DATABASE` | synpharm | 库名 |
 | `MYSQL_USER` / `MYSQL_PASSWORD` | synpharm / - | 应用账号（**密码必填**） |
-| `MYSQL_PORT` | 3306 | 宿主映射端口 |
-| `REDIS_PORT` | 6379 | 宿主映射端口 |
+| `MYSQL_PORT` | 13307 | 宿主映射端口（3307-3406 属 Windows/Hyper-V 保留段，不可用） |
+| `REDIS_PORT` | 6380 | 宿主映射端口（避开本机已有的 6379） |
 | `REDIS_PASSWORD` | 空 | 生产建议设置 |
 | `RABBITMQ_USER` | synpharm | RabbitMQ 用户名（**密码必填**） |
 | `RABBITMQ_PASSWORD` | - | **必填**，RabbitMQ 密码 |

@@ -1,5 +1,40 @@
 # 更新日志
 
+## [v3.2.1] - 2026-09-21
+
+### 今日主题
+
+修复容器化环境"一键启动总是失败"的问题，定位并解决 `.env` 漂移、批处理编码、重复构建三个根因。
+
+### 修复
+
+1. **`.env` 漂移导致启动失败（根本原因）**
+   - 现象：`docker compose` 报 `required variable JWT_SECRET is missing a value`；
+     补上空值后 MySQL 健康检查仍持续失败，`--wait` 超时报笼统的"启动失败"
+   - 原因：`deploy/.env` 被 `.env.example` 覆盖 —— 必填项变空，且 MySQL 密码与
+     **容器首次初始化数据卷时**写入的密码不一致（数据卷里的密码不会随 `.env` 变更而同步）
+   - 处理：从现存容器 `docker inspect` 读回真实值回填 `.env`，**未删除数据卷、未丢失数据**
+
+2. **`deploy/scripts/start.bat` 重写为纯 ASCII**
+   - 原因：cmd.exe 解析含非 ASCII 字节的批处理文件时会错位，把注释甚至 `echo` 当成命令执行。
+     实测：UTF-8 + `chcp 65001` ❌、UTF-8 无 chcp ❌、GBK 无 chcp ✅ 但 UTF-8 终端显示乱码
+   - 同时修复 `if (...)` 块内 `echo` 含裸括号（`credential(s)`）导致块提前结束的报错
+
+3. **启动脚本健壮性提升**
+   - 自动定位 `docker.exe`：终端 PATH 未刷新时不再误报"Docker 未运行"
+   - 自动拉起 Docker Desktop 并等待就绪（最多 180 秒）
+   - 已有容器运行时跳过端口预检（避免"自己占自己"的误报）
+   - **镜像已存在则跳过构建**：此前每次 `--build`，在构建缓存被回收后会重下 185 MB 的 torch，
+     实测卡住 12 分钟以上；需要重建时执行 `scripts\start.bat rebuild`
+
+### 文档
+
+- 重写 `deploy/环境配置说明.md`：新增"启动失败的三大真实原因"、`start.bat` 行为说明、
+  维护须知（脚本必须保持纯 ASCII）与 `.env` 覆盖警告
+- 同步 `README.md`、`docs/deploy/容器化部署与Docker环境指南.md`、`docs/deploy/部署指南.md`：
+  移除"先把 `.env.example` 复制为 `.env`"的过时指引（这正是本次故障的成因），
+  修正端口（后端 8080→7000、FastAPI 8000→9050）与失效路径（`d:\SynPharm\docker`→`deploy`）
+
 ## [v3.2.0] - 2026-08-23
 
 ### 今日主题
