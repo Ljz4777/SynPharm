@@ -1,6 +1,6 @@
 from core.schemas import PredictionMetrics
 from core.base_algo import BaseAlgo
-from core.exceptions import InvalidInputError, ModelNotFoundError
+from core.exceptions import InferenceError, InvalidInputError, ModelNotFoundError
 from services.algorithm_adapters import get_dti_predictor
 
 
@@ -30,6 +30,10 @@ class DTIService(BaseAlgo):
             pred, score = predictor.predict(smiles, target_seq)
         except ValueError as e:
             raise InvalidInputError(str(e))
+        except RuntimeError as e:
+            # 模型内部前向失败（如整批样本被跳过）-> 503，
+            # 不要把它伪装成 200 假结果，也不要昇级为无信息的 500
+            raise InferenceError(str(e))
         return self._to_metrics(pred, score)
 
     def _to_metrics(self, pred: int, score: float) -> PredictionMetrics:

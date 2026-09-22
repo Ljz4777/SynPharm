@@ -53,7 +53,10 @@ async def predict_single(req: SingleRequest):
         logger.info(f"Single prediction completed: algo_type={req.algo_type}")
         return {"status": "success", "metrics": result}
     
-    except InvalidInputError:
+    except PredictionError:
+        # 400/404/422/503 都是"已经分好类"的错误，必须原样透出：
+        # 否则调用方只能看到一个笼统的 500（历史上 404 就这样被吞成 500，
+        # 导致"模型未就绪"和"服务真故障"无法区分）。
         raise
     except Exception as e:
         logger.error(f"Prediction failed: {str(e)}", exc_info=True)
@@ -70,11 +73,31 @@ async def predict_batch(req: BatchPredictionRequest):
     try:
         data_list = [item.dict() for item in req.data_list]
         results = batch_predictor.run(data_list, req.algo_type)
-        
-        logger.info(f"Batch prediction completed: algo_type={req.algo_type}, results={len(results)}")
-        return {"status": "success", "total": len(results), "results": results}
-    
-    except InvalidInputError:
+
+        # 逐条统计成败：此前不管全失败与否都固定返回 status=success，
+        # 导致上游把"全批失败 + 只有表头的 CSV"判定成批次 SUCCESS。
+        failed = sum(1 for r in results if "error" in r)
+        succeeded = len(results) - failed
+        if failed == 0:
+            status = "success"
+        elif succeeded == 0:
+            status = "error"
+        else:
+            status = "partial"
+
+        logger.info(
+            "Batch prediction completed: algo_type=%s, total=%d, success=%d, failed=%d, status=%s",
+            req.algo_type, len(results), succeeded, failed, status,
+        )
+        return {
+            "status": status,
+            "total": len(results),
+            "success": succeeded,
+            "failed": failed,
+            "results": results,
+        }
+
+    except PredictionError:
         raise
     except Exception as e:
         logger.error(f"Batch prediction failed: {str(e)}", exc_info=True)

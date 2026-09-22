@@ -33,6 +33,9 @@ public enum PredictionErrorCode {
     /** SMILES 表达式不合法 */
     INVALID_SMILES("SMILES 表达式不合法"),
 
+    /** 药物不在 DDI 模型的支持范围内（转导式模型的能力边界） */
+    DRUG_NOT_SUPPORTED("药物不在 DDI 支持范围内"),
+
     /** 算法引擎（FastAPI）不可用 */
     FASTAPI_UNAVAILABLE("算法引擎不可用"),
 

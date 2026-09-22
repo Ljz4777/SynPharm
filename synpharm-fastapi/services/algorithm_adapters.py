@@ -15,6 +15,7 @@
 
 from __future__ import annotations
 
+import csv
 import importlib.util
 import logging
 import sys
@@ -22,18 +23,43 @@ from pathlib import Path
 
 import torch
 
+from config import settings
+
 logger = logging.getLogger(__name__)
 
-# models/ 目录（本文件在 services/ 下，上一级即 synpharm-fastapi 根）
-MODELS_DIR = Path(__file__).resolve().parent.parent / "models"
+_APP_DIR = Path(__file__).resolve().parent.parent
+
+
+def _resolve_model_dir() -> Path:
+    """模型目录：settings.model_dir 为绝对路径时直接用，否则相对项目根解析。
+
+    原先硬编码为 <项目根>/models，恰好与容器里 MODEL_DIR=/app/models 一致；
+    改成读配置后，本地把模型放到别处也能生效。
+    """
+    raw = Path(settings.model_dir)
+    return raw if raw.is_absolute() else (_APP_DIR / raw).resolve()
+
+
+MODELS_DIR = _resolve_model_dir()
 
 _UNSET = object()
 _cache: dict = {}
 
 
+class DrugNotInGraphError(ValueError):
+    """输入合法，但药物不在模型训练图内（DDI-LLM 是转导式模型）。
+
+    继承 ValueError 以保持旧的捕获路径可用，同时让 service 层能单独分流成 422。
+    """
+
+
 def _auto_device() -> str:
-    """优先 GPU，无 GPU 回退 CPU。"""
-    return "cuda" if torch.cuda.is_available() else "cpu"
+    """推理设备：以 settings.device 为准；配置了 cuda 但环境无 GPU 时回退 cpu。"""
+    want = (settings.device or "cpu").strip()
+    if want.startswith("cuda") and not torch.cuda.is_available():
+        logger.warning("配置 device=%s，但当前环境无可用 CUDA，已回退 cpu", want)
+        return "cpu"
+    return want
 
 
 def _load_module(module_name: str, file_path: Path):
@@ -59,6 +85,36 @@ def _get_or_load(key: str, loader):
 # --------------------------------------------------------------------------- #
 # DDI-LLM：转导式 GCN，图内药物点积 -> sigmoid 概率
 # --------------------------------------------------------------------------- #
+_ddi_drug_index: dict = {}
+
+
+def _read_drug_names(csv_path: Path) -> dict:
+    """读 DDI-LLM 自带的 Drug_description.csv，返回 Drug ID -> Drug Name。"""
+    if not csv_path.exists():
+        return {}
+    names: dict = {}
+    try:
+        with csv_path.open("r", encoding="utf-8", errors="replace", newline="") as f:
+            for row in csv.DictReader(f):
+                drug_id = (row.get("Drug ID") or "").strip()
+                if drug_id:
+                    names[drug_id] = (row.get("Drug Name") or "").strip()
+    except Exception as e:  # noqa: BLE001 —— 药名仅供展示，取不到不影响推理
+        logger.warning("[DDI-LLM] 读取药名表失败: %s", e)
+    return names
+
+
+def get_ddi_drug_index() -> dict:
+    """返回训练图内药物 {DrugBank ID: 药名}；模型未就绪时返回空 dict。
+
+    转导式模型只学到图内节点的 embedding，图外新药数学上无法预测，
+    所以这份白名单就是 DDI 的真实能力边界。
+    """
+    if not _ddi_drug_index:
+        get_ddi_predictor()      # 触发懒加载，顺带填充白名单
+    return _ddi_drug_index
+
+
 def _load_ddi_predictor():
     base = MODELS_DIR / "DDI-LLM"
     ckpt_path = base / "weights" / "ddi_gcn_morgan.pt"
@@ -77,10 +133,19 @@ def _load_ddi_predictor():
     ckpt, z = inf.load_model(str(ckpt_path))
     node_id_map = ckpt["node_id_map"]
 
+    # 填充白名单，供 GET /v1/ddi/drugs 导出能力边界
+    global _ddi_drug_index
+    _names = _read_drug_names(base / "data" / "Drug_description.csv")
+    _ddi_drug_index = {d: _names.get(d, "") for d in sorted(node_id_map.keys())}
+
     def predict(drug_a: str, drug_b: str) -> float:
         if drug_a not in node_id_map or drug_b not in node_id_map:
             missing = [d for d in (drug_a, drug_b) if d not in node_id_map]
-            raise ValueError(f"药物不在训练图内，无法预测: {', '.join(missing)}")
+            raise DrugNotInGraphError(
+                f"药物不在 DDI-LLM 训练图内（图内共 {len(node_id_map)} 个药物），"
+                f"无法预测: {', '.join(missing)}。"
+                f"图内药物清单见 GET /v1/ddi/drugs"
+            )
         u = node_id_map[drug_a]
         v = node_id_map[drug_b]
         logit = float((z[u] * z[v]).sum().item())

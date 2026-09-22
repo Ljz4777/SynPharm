@@ -48,6 +48,21 @@ class BatchPredictionRequest(BaseModel):
 
 
 class BatchPredictionResponse(BaseModel):
-    status: str
+    status: str          # success / partial / error
     total: int
+    success: int = 0
+    failed: int = 0
     results: List[dict]
+
+
+class DdiDrug(BaseModel):
+    """DDI-LLM 训练图内的药物（转导式模型只能预测这些药物两两之间的相互作用）。"""
+
+    drug_id: str                      # DrugBank ID，如 DB00880
+    drug_name: Optional[str] = None
+
+
+class DdiDrugListResponse(BaseModel):
+    model: str = "DDI-LLM"
+    total: int
+    drugs: List[DdiDrug]

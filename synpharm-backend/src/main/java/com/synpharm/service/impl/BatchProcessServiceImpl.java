@@ -234,7 +234,7 @@ public class BatchProcessServiceImpl implements BatchProcessService {
                         PredictResultResponse response = convertResult(resultMap, task.getAlgoType(), row.resolved);
                         saveRecord(task, row.item, response);
                         successCount++;
-                        allResults.add(toResultMap(response));
+                        allResults.add(toResultMap(response, task.getAlgoType(), row.resolved));
                     }
                 }
 
@@ -504,16 +504,49 @@ public class BatchProcessServiceImpl implements BatchProcessService {
         };
     }
 
-    /** 兼容既有结果 CSV 格式（下载功能不变） */
-    private Map<String, Object> toResultMap(PredictResultResponse response) {
+    /**
+     * 组装结果 CSV 的一行。
+     *
+     * <p>键名必须与 {@link CsvUtils} 的结果表头（snake_case）逐一对齐，否则
+     * {@code CsvUtils.formatResultLine} 取不到值，下载到的 CSV 只有表头、数据行全是空。
+     *
+     * <p>输入字段（SMILES / 序列 / 蛋白序列）不在 {@link PredictResultResponse} 中，
+     * 只能从已解析的输入透传，故单独接收 {@code resolved}。
+     */
+    private Map<String, Object> toResultMap(PredictResultResponse response, String algoType, ResolvedPredictionInput resolved) {
         Map<String, Object> result = new HashMap<>();
-        result.put("algoType", response.getAlgoType());
-        result.put("targetId", response.getTargetId());
-        result.put("targetName", response.getTargetName());
-        result.put("bindingAffinity", response.getBindingAffinity());
-        result.put("confidenceScore", response.getConfidenceScore());
-        result.put("confidenceLevel", response.getConfidenceLevel());
+        String algo = algoType == null ? "" : algoType.toUpperCase();
+
+        // 前两列：算法对应的输入（与 CsvUtils 的 DTI/PPI/DDI_RESULT_HEADERS 一致）
+        switch (algo) {
+            case "DTI" -> {
+                result.put("drug_smiles", orEmpty(resolved.getLigandSmiles()));
+                result.put("target_seq", orEmpty(resolved.getTargetSequence()));
+            }
+            case "PPI" -> {
+                result.put("protein_a", orEmpty(resolved.getProteinA()));
+                result.put("protein_b", orEmpty(resolved.getProteinB()));
+            }
+            case "DDI" -> {
+                result.put("drug_a", orEmpty(resolved.getDrugA()));
+                result.put("drug_b", orEmpty(resolved.getDrugB()));
+            }
+            default -> {
+                // 未知算法：不写入输入列，后续列仍会输出
+            }
+        }
+
+        // 后几列：预测结果。
+        // 注：必须把 null 转成 ""，CsvUtils 用的是 getOrDefault，
+        // 键存在但值为 null 时它仍会拿到 null，格式化后会输出字符串 "null"。
+        result.put("binding_affinity", orEmpty(response.getBindingAffinity()));
+        result.put("confidence_score", orEmpty(response.getConfidenceScore()));
+        result.put("confidence_level", orEmpty(response.getConfidenceLevel()));
         return result;
+    }
+
+    private Object orEmpty(Object value) {
+        return value == null ? "" : value;
     }
 
     private BatchItemResponse toItemResponse(BatchTaskItem item) {

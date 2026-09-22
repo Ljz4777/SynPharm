@@ -138,13 +138,14 @@ graph LR
 
 | ID | 问题 | 归属 | 证据 | 来源 |
 |---|---|---|---|---|
-| A-01 | RabbitMQ 监听被注释，批量永久 PENDING | 后端 | `mq/RabbitConfig.java:32`、`mq/BatchTaskConsumer.java:39` 🔍 | NEW |
-| A-02 | FlashPPI 权重缺失，PPI 100% 不可用 | 算法 | `models/FlashPPI/weights/`（无 `model.safetensors`） | SRC-02 |
-| A-03 | DDI 契约三方互斥（要 DrugBank ID，传 SMILES） | 三端 | `algorithm_adapters.py:80-86` vs `PredictionInputResolver.java:95-110` vs `Predict.vue:480-507` 🔍 | SRC-02 |
+| A-01 | ✅ **已修复**：恢复 `@EnableRabbit` 与 `@RabbitListener`。这是 `processBatch` 的唯一触发点，注释期间批量上传只写库无人消费，任务永久 PENDING | 后端 | `mq/RabbitConfig.java`、`mq/BatchTaskConsumer.java` |
+| A-02 | ✅ **已修复**：权重已下载（2796 MB）；且真正的阻塞点是依赖错位（transformers 5.x 要求 torch≥2.5，镜像却钉 2.1.0 → PyTorch 被禁用），已在 v3.3.0 升级 torch 2.5.1 后实测可用 | 算法 | `models/FlashPPI/weights/model.safetensors`、`synpharm-fastapi/Dockerfile` |
+| A-03 | ✅ **已修复**：新增 Java 侧 `DdiDrugResolver` 转换层（SMILES → DrugBank ID，SHA-256 查表）+ `sql/10_ddi_supported_drug.sql` 白名单（1323 行）+ `GET /api/predict/ddi/drugs` 能力边界查询接口 | 三端 | `pipeline/resolve/DdiDrugResolver.java`、`PredictionInputResolver.java` |
 | A-04 | 前端仍调后端已废弃的 `/dti`\|`/ppi`\|`/ddi` | 前端 | `api/predict.ts:51-59` vs `PredictController.java:68,85,101` 🔍 | 修复方案 P0-2 |
-| A-05 | 批量 CSV 字段错位，输入列恒空 | 后端 | `BatchProcessServiceImpl.java:508-518` vs `CsvUtils.java:120-137` 🔍 | NEW |
-| A-06 | 批量"全失败"上报成功 + 空 CSV | 算法/后端 | `api/v1/predict.py:71-75`、`batch_service.py:27-29`、`BatchProcessServiceImpl.java:256-263` | NEW |
+| A-05 | ✅ **已修复**：`toResultMap` 改按算法输出 snake_case 键（与 `CsvUtils` 表头逐一对齐），并新增 `resolved` 入参补齐输入列 | 后端 | `BatchProcessServiceImpl.java`、`CsvUtils.java:120-137` |
+| A-06 | ✅ **已修复**：引擎侧逐条统计 status/success/failed（success/partial/error）；Java 侧 `BatchPredictionResponse` 补上 `success`/`failed`；三个执行器改为按 `error` 键判定，不再无条件标 success | 算法/后端 | `api/v1/predict.py`、`BatchPredictionResponse.java`、`*AlgoExecutor.java` |
 | A-07 | nginx 1MB 体限制拦截批量上传（后端允许 100MB） | 部署 | `nginx.conf:31-37`（无 `client_max_body_size`）🔍 | NEW |
+| A-09 | ✅ **已修复**：`ROW_NUMBER` 是 MySQL 8.0 保留字，建表脚本已加反引号，但实体 `@TableField("row_number")` 未加 → MyBatis-Plus 生成 `INSERT ... ( batch_id, row_number, ... )` 报语法错误，批量上传 100% 失败。改为 `` @TableField("`row_number`") `` | 后端 | `model/entity/BatchTaskItem.java`、`sql/09_batch_task_item.sql` | NEW（实跑批量时发现，原总账未收录） |
 | B-01 | MySQL root 口令 + QQ 邮箱授权码硬编码入仓 | 安全 | `application-dev.yml:9`、`application.yml:25`、`application-dev.yml:25` 🔍 | NEW |
 | B-02 | 弱口令管理员随部署自动创建 | 安全 | `sql/07_test_data.sql:8`、`deploy/docker-compose.yml:31` 🔍 | NEW |
 | B-03 | 任务详情/取消无归属校验（IDOR） | 后端 | `TaskController.java:54,68`、`TaskServiceImpl.java:57-62,94-101` 🔍 | NEW |
@@ -152,7 +153,7 @@ graph LR
 | B-06 | 密码/验证码走 URL query 明文传输 | 前端 | `api/auth.ts:90-93,96-99,121-124` 🔍 | NEW |
 | B-07 | CORS 任意源 + `allowCredentials(true)` | 后端 | `CorsConfig.java:37,46` 🔍 | NEW |
 | C-01 | 首页"快速预测演示"纯前端伪造 | 前端 | `Home.vue:206-234`（`setTimeout` + `Math.random()`）🔍 | NEW |
-| C-03 | KAN-MoDTI 内部崩溃静默返回假结果 `[0],[0],[0.5]` | 算法 | `models/KAN-MoDTI/model.py:265-269`、`inference.py:214` | NEW |
+| C-03 | ✅ **已修复**：`model.py` 图分支失败改为 `raise RuntimeError`，不再返回伪造的 `[0],[0],[0.5]` | 算法 | `models/KAN-MoDTI/model.py`、`inference.py` |
 
 ### 3.2 P1（高优先，41 条）
 
@@ -213,7 +214,7 @@ graph LR
 | F-01 | 三个 profile 均开 `StdOutImpl`（同 B-13） | 后端 | `application.yml:45`、`-dev.yml:40`、`-docker.yml:49` |
 | F-02 | `application-docker.yml` 把 `api-key` 错放在 `logging` 节点下 | 后端 | `application-docker.yml` |
 | F-05 | 无外键；`predict_result` 无内容唯一约束；`create_time/update_time` 未纳入填充 | 数据库 | `sql/03`、`sql/04`；`MyBatisPlusMetaObjectHandler.java:28-31` |
-| F-07 | `requirements.txt` 混用固定/未固定版本，`torch` 不在其中 | 算法 | `requirements.txt:13-15`、`Dockerfile:24` |
+| F-07 | ✅ **已修复**：`requirements.txt` 版本区间已补齐上下限（`numpy>=2.1,<3`、`transformers>=5.0,<6`、`pandas>=2.2.3`、`scikit-learn>=1.5.2`）；`torch` 仍由 `Dockerfile` 单独装，但已锁 `2.5.1+cpu` | 算法 | `requirements.txt`、`Dockerfile:24` |
 | F-09 | 前端无 404 兜底路由；`vite.config.ts` 无 dev 代理 | 前端 | `router/index.ts:8-77` |
 | G-03 | `rememberMe` 勾选框无任何行为 | 前端 | `Login.vue:121-126,432` |
 | G-04 | 任务页"暂停"按钮空实现（后端也无该能力） | 前端 | `Tasks.vue:49,155-157` |
@@ -779,7 +780,7 @@ if (userId != null && !userId.equals(result.getUserId())) {   // userId == null 
 | 位置 | 问题 |
 |---|---|
 | `models/DDI-LLM/inference.py:25` | `torch.load(..., weights_only=False)` → pickle 可执行任意对象 |
-| `models/KAN-MoDTI/inference.py:194` | 未指定 `weights_only`（torch ≥2.6 默认值变化，非 Docker 环境行为不一致） |
+| `models/KAN-MoDTI/inference.py:194` | ✅ 已改为显式 `weights_only=False`（与 DDI 对齐，不再依赖 torch 版本默认值；同时镜像将 torch 锁在 2.5.x，未跨入 2.6 的默认值变更区） |
 | `models/FlashPPI/inference.py:82-83` | `trust_remote_code=True` → 执行权重目录下的 `modeling_flashppi.py` |
 
 `deploy/docker-compose.yml:164` 把宿主 `models/` **只读**挂入（这点是正确的），但权重来源若是第三方下载，仍需校验 hash。
@@ -1164,7 +1165,7 @@ except Exception as e:
 | F-04 | SQL 脚本不幂等/可清库 | `sql/09_sys_user_research_profile.sql:14-15` 自述不幂等；`sql/01`~`06` 全是 `DROP TABLE IF EXISTS` | 手工在已上线库执行 `sql/` 即清空用户/任务/结果数据 |
 | F-05 | 无外键、无内容唯一约束 | `sql/03`、`sql/04` 无 FK；`predict_result` 无内容唯一键 | 逻辑删除用户后悬挂数据；统计口径混乱 |
 | F-06 | 镜像与 CI 缺口 | `synpharm-frontend/Dockerfile:32-33`（`RUN npx vite build` 跳过 `vue-tsc`）🔍；仓库无 CI 配置；`synpharm-backend/Dockerfile:37` 无 JVM 内存参数 | 类型错误直接进镜像；容器内存超限易被 OOMKill |
-| F-07 | Python 依赖不可复现 | `requirements.txt:13-15`（`rdkit`/`transformers>=4.40`/`einops>=0.7` 未固定）；`torch` 不在文件内（`Dockerfile:24` 单独装 `2.1.0+cpu`） | 本地 `pip install -r requirements.txt` 装不出可运行环境 |
+| F-07 | ✅ 已修复（依赖已对齐到 numpy 2 生态） | `requirements.txt` 已补齐版本区间；`torch` 锁 `2.5.1+cpu` | 原症状：本地 `pip install -r requirements.txt` 装不出可运行环境；升级前还导致 PPI 整个算法失效 |
 | F-08 | 本地 `.env` 污染构建 | `.env:3` `VITE_API_BASE_URL=http://localhost:8080`、`:5` `VITE_ENABLE_MOCK=true`；`:4` 的 `VITE_API_TIMEOUT` 既未声明也未使用（`request.ts:11` 写死 30000）🔍 | (a) 任何人本机 `npm run build` 后把 dist 传服务器 → 所有接口指向"用户自己的电脑"；(b) 本地 dev 走 mock 登录，而 mock 账号 `demo@protein.com`（`stores/auth.ts:31-43`）过不了只允许 QQ 邮箱的校验（`utils/validators.ts:133`）→ **验证码/密码登录必然失败**，只能游客登录，极易被误判为"后端挂了" |
 | F-09 | 前端无 404 路由 / 无 dev 代理 | `router/index.ts:8-77` 无 `/:pathMatch(.*)*` | 访问 `/xyz` 得到纯空白页（连顶栏都没有）；开发靠后端 CORS `*` 才连通 |
 

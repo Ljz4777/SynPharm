@@ -2,7 +2,7 @@ import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from api.v1 import predict, health
+from api.v1 import predict, health, ddi
 from core.auth import verify_api_key
 from core.exceptions import register_exception_handlers
 from core.logging_config import setup_logging
@@ -47,6 +47,12 @@ app.include_router(
     predict.router,
     prefix="/v1/predict",
     tags=["predict"],
+    dependencies=[Depends(verify_api_key)]
+)
+app.include_router(
+    ddi.router,
+    prefix="/v1/ddi",
+    tags=["ddi"],
     dependencies=[Depends(verify_api_key)]
 )
 app.include_router(

@@ -17,13 +17,26 @@ ARG PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
 ARG PYTORCH_WHEELS_URL=https://mirrors.aliyun.com/pytorch-wheels/cpu/
 
 WORKDIR /deps
-COPY requirements.txt .
-# 先安装 CPU 版 PyTorch（约 176MB，避免拉取 ~2GB 的 CUDA 依赖）
+
+# 先安装 CPU 版 PyTorch（约 185MB，避免拉取 ~2GB 的 CUDA 依赖）
 # 注：PyTorch wheel 源是扁平目录（非 PEP503 索引），必须用 --find-links；
 #     固定 +cpu 本地版本号可确保不会从 PyPI 误选到 CUDA 版本。
-RUN pip install --no-cache-dir --prefix=/install "torch==2.1.0+cpu" \
+#
+# 版本选择依据：
+#   * transformers 5.x 硬性要求 torch >= 2.5，2.1.0 会被直接禁用 PyTorch 集成
+#     （FlashPPI 依赖 AutoModel，禁用后 PPI 直接不可用）。
+#   * 上限刻意停在 2.5.x：torch 2.6 起 torch.load 的 weights_only 默认改为 True，
+#     而 DTI/DDI 的权重是整包 pickle，升到 2.6 会直接加载失败。
+#
+# ⚠️ 顺序很重要：本步骤必须在 COPY requirements.txt 之**前**。
+#    torch 只由这一行的版本号决定，与 requirements.txt 无关；
+#    若放在 COPY 之后，任何 requirements 改动都会让该层缓存失效，
+#    每次都重新下载这 175 MB。
+RUN pip install --no-cache-dir --prefix=/install "torch==2.5.1+cpu" \
       --find-links "${PYTORCH_WHEELS_URL}" \
       --index-url "${PIP_INDEX_URL}"
+
+COPY requirements.txt .
 # 再安装其余依赖（requirements.txt 已不含 torch）
 RUN pip install --no-cache-dir --prefix=/install -r requirements.txt \
       --index-url "${PIP_INDEX_URL}"

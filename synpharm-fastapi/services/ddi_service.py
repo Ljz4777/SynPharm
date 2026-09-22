@@ -1,7 +1,7 @@
 from core.schemas import PredictionMetrics
 from core.base_algo import BaseAlgo
-from core.exceptions import InvalidInputError, ModelNotFoundError
-from services.algorithm_adapters import get_ddi_predictor
+from core.exceptions import InvalidInputError, ModelNotFoundError, OutOfGraphError
+from services.algorithm_adapters import DrugNotInGraphError, get_ddi_predictor
 
 
 class DDIService(BaseAlgo):
@@ -25,16 +25,29 @@ class DDIService(BaseAlgo):
             # 权重/依赖缺失：直接报错，不再返回 mock
             raise ModelNotFoundError("DDI")
 
-        # 真实推理：图内药物点积 -> sigmoid 概率；图外药物抛 ValueError -> 400
+        # 真实推理：图内药物点积 -> sigmoid 概率
         try:
             confidence = predictor(drug_a, drug_b)
+        except DrugNotInGraphError as e:
+            # 输入合法，只是超出模型能力范围 -> 422，与"格式写错"(400) 区分开
+            raise OutOfGraphError(str(e))
         except ValueError as e:
             raise InvalidInputError(str(e))
-        return self._to_metrics(confidence)
+        return self._to_metrics(drug_a, drug_b, confidence)
 
-    def _to_metrics(self, confidence: float) -> PredictionMetrics:
+    def _to_metrics(self, drug_a: str, drug_b: str, confidence: float) -> PredictionMetrics:
+        """组装 DDI 的指标。
+
+        DDI 的预测对象是「药物对」，不存在单一靶点，所以：
+
+        * `target_id` 用药物对本身标识（DrugBank ID 以 `-` 连接），
+          与后端 {@code PredictUtils} 中 DDI 的既有约定一致；
+          此前硬编码的 `DDI_TARGET` 是一个看起来像真实靶点的伪造标识。
+        * `target_name` 保留为人类可读的语义标签，供前端直接展示。
+        * `binding_affinity` / `interactions` 对 DDI 无意义，保持为空。
+        """
         return PredictionMetrics(
-            target_id="DDI_TARGET",
+            target_id=f"{drug_a}-{drug_b}",
             target_name="药物相互作用",
             confidence_score=round(confidence, 4),
             confidence_level=_confidence_level(confidence),

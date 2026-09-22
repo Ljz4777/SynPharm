@@ -8,6 +8,7 @@ import com.synpharm.enums.InputType;
 import com.synpharm.enums.OutputType;
 import com.synpharm.exception.BusinessException;
 import com.synpharm.exception.PipelineException;
+import com.synpharm.exception.PredictionException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -83,6 +84,11 @@ public class DataPipelineFactory implements PipelineFactory {
         ParsedInput parsedInput;
         try {
             parsedInput = parser.parse(inputValue, fileUrl, algoType.getCode());
+        } catch (PredictionException e) {
+            // 已经分类好的预测异常（如 DRUG_NOT_SUPPORTED / UNIPROT_NOT_FOUND）必须原样抛出。
+            // 否则会被包装成笼统的 INPUT_RESOLVE_FAILED，具体错误码丢失，
+            // 调用方无法区分"药物不在支持范围"和"输入格式写错"。
+            throw e;
         } catch (Exception e) {
             throw PipelineException.parse(e.getMessage(), e);
         }

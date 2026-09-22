@@ -191,7 +191,7 @@ class KANMoDTIPredictor:
             max_seq_len=MAX_SEQ_LEN,
         ).to(self.device)
 
-        state = torch.load(weight_path, map_location=self.device)
+        state = torch.load(weight_path, map_location=self.device, weights_only=False)
         self.model.load_state_dict(state)
         self.model.eval()
         print(f"[KAN-MoDTI] 加载权重: {weight_path}")

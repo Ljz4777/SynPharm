@@ -18,6 +18,10 @@ public class AlgoResponse {
 
     private String status;
     private String algoType;
+
+    /** 失败时的错误信息（成功为 null）。批量预测中用 error 键标记的单行失败会落到这里 */
+    private String errorMessage;
+
     private PredictionMetrics metrics;
 
     @Data

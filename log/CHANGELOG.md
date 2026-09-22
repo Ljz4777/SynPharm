@@ -1,5 +1,98 @@
 # 更新日志
 
+## [v3.3.0] - 2026-09-22
+
+### 今日主题
+
+把算法引擎依赖对齐到 numpy 2 生态（解决 PPI 完全不可用），并修复批处理链路的四处断点。
+
+### 修复
+
+1. **PPI（FlashPPI）完全不可用 —— 依赖版本错位（根本原因）**
+   - 现象：权重已下载（2796 MB）却加载失败，日志为
+     `Disabling PyTorch because PyTorch >= 2.5 is required but found 2.1.0+cpu`
+   - 原因：`requirements.txt` 中 `transformers>=4.40` 未锁版本，实际装成 5.x；
+     而 5.x 硬性要求 `torch>=2.5`，`Dockerfile` 却把 torch 钉在 `2.1.0+cpu`
+   - 处理：torch → `2.5.1+cpu`；numpy → `>=2.1,<3`；pandas / scikit-learn 同步抬高下限
+     （旧 wheel 按 numpy 1.x 编译，在 numpy 2 下 import 即报 ABI 错误）；
+     transformers 加 `<6` 上限，防止再次跨大版本静默漂移
+
+2. **DDI 与 PPI 实为同一根因**：容器 numpy 锁在 1.26，而项目权重文件本身是 numpy 2 时代产物
+   - DDI 加载报 `No module named 'numpy._core'`，此前靠 `_patch_numpy_legacy_aliases()` 别名补丁绕过
+   - numpy 升到 2.x 后该补丁成为空操作，**已移除**，并回归验证 DDI 仍为 `0.662937`、白名单 `1323`
+   - 注：torch 上限刻意停在 2.5.x —— 2.6 起 `torch.load` 的 `weights_only` 默认改为 `True`，
+     会直接击穿 DTI/DDI 的整包 pickle 权重
+
+3. **批处理任务永远停在 PENDING**
+   - `RabbitConfig` 的 `@EnableRabbit` 与 `BatchTaskConsumer` 的 `@RabbitListener` 都被注释；
+     而 `processBatch` 全仓只有该消费者一个调用方 → 上传写库成功但无人消费
+   - 处理：恢复两处注解，并把 javadoc 改成醒目的依赖说明
+
+4. **批次结果 CSV 数据行全空**
+   - `BatchProcessServiceImpl.toResultMap` 写 camelCase 键，`CsvUtils.formatResultLine`
+     读 snake_case 键，两组键**零交集** → 下载的 CSV 只有表头
+   - 且输入字段（SMILES / 序列）不在 `PredictResultResponse` 中，只对齐键名仍不够
+   - 处理：按算法输出对应 snake_case 键，新增 `resolved` 入参补齐输入列，
+     并把 null 统一转 `""`（`getOrDefault` 遇到"键存在且值为 null"时仍会取到 null）
+
+5. **批量失败行被伪装成成功**：DTI / PPI / DDI 三个执行器无条件 `setStatus("success")`
+   - 处理：改为按引擎返回的 `error` 键判定，失败行不填 metrics；`AlgoResponse` 补 `errorMessage` 字段
+
+6. **批次统计字段被吞**：`BatchPredictionResponse` 缺 `success` / `failed`，引擎的逐条统计被 Jackson 静默丢弃
+
+7. **DDI 结果伪造靶点标识**：`target_id` 原为常量 `DDI_TARGET`
+   - 处理：改为药物对 `{drug_a}-{drug_b}`，与项目自身在 `PredictUtils` 中的 DDI 约定一致
+
+8. **批量上传 100% 失败：MySQL 保留字未转义**（实跑批量时发现，原问题总账未收录）
+   - `ROW_NUMBER` 是 MySQL 8.0 保留字；建表脚本里已写 `` `row_number` ``，
+     但实体上写的是 `@TableField("row_number")`，少了反引号 →
+     MyBatis-Plus 生成 `INSERT INTO batch_task_item ( batch_id, row_number, ... )`
+     → `SQLSyntaxErrorException`，表现为"上传直接 400"
+   - 处理：改为 `` @TableField("`row_number`") ``
+   - 该缺陷此前被 A-01（MQ 监听被注释）掩盖 —— **两处都修，批量才真正跑通**
+
+9. **扩容脚本未应用到已部署环境**：`batch_task_item` 表在 MySQL 里根本不存在
+   - 原因：`deploy/` 的 initdb 挂载**只在数据卷首次初始化时执行**，
+     后加入的 `sql/*.sql` 不会自动应用，必须手工执行一次
+   - 处理：已手工应用 `sql/09_batch_task_item.sql`
+
+### 验证
+
+容器内直接调用适配器 + HTTP 端到端，全部对齐升级前记录的基线：
+
+| 项 | 实测结果 | 基线 |
+|---|---|---|
+| DTI（KAN-MoDTI） | `(0, 0.000234)`，类别 0 | 类别 0 / 0.0001 |
+| DDI（DDI-LLM） | `DB00880+DB09220 → 0.662937` | 0.6629 |
+| DDI 白名单 | `1323` | 1323 |
+| **PPI（FlashPPI）** | **首次可用**：`contact_score=0.190828`、`clip_score=0.516538`、contact_map 668×668 | — |
+| `GET /api/predict/ddi/drugs` | `total=1323`，首项 `DB00006 / Bivalirudin` | 新增 |
+| 批量链路 | 上传 3 行 → `SUCCESS`、`successCount=3`、`failCount=0`、`progress=100` | 修复前永久 PENDING |
+| 批量结果 CSV | 表头 + 3 行真实数据，首行 `DB00880,DB09220,0.6629,medium` | 修复前只有表头 |
+
+### 新增
+
+- `GET /api/predict/ddi/drugs`：DDI 可预测药物白名单（代理引擎 `GET /v1/ddi/drugs`）。
+  DDI-LLM 是转导式模型，只能预测训练图内的药物；该接口把"模型不支持"
+  从事后报错变成事前可见，供前端渲染可选药物下拉。
+
+### 文档
+
+- **合并重复的 CHANGELOG**：根 `CHANGELOG.md`（截至 v3.0.0）与 `log/CHANGELOG.md`
+  （v3.1.0 起）本为互补关系，现合并为 `log/CHANGELOG.md` 单一版本，历史完整保留
+- **删除 7 份冗余文档**：
+  - `synpharm-backend/架构设计文档.md` —— 与 `docs/architecture/架构设计文档.md` 逐字节相同
+  - `docs/development/已发现问题清单与改进方案.md`、`未实现功能修复技术方案.md`
+    —— 《问题总账与整改方案（整合版）》§1 自述已将其并入 §3 / §4 / §7 / §8 / §13 / §14 / §15
+  - `docs/modules/predict/algorithm/{DTI,PPI,DDI}数据流开发操作文档.md`
+    —— 三个组件均已实现，教程使命完成；总览由 `docs/modules/predict/数据流开发操作文档.md` 承担
+  - `docs/modules/predict/AI预测核心模块技术开发文档.md`
+    —— 已被拆分为 SpringBoot / FastAPI 两份文档取代，且其内部导航指向的文件名已失效
+- 同步修正因上述改动而失效的引用：`docs/deploy/上线流程详细版.md`（`CHANGELOG.md` → `log/CHANGELOG.md`）、
+  `docs/architecture/SynPharm项目整体架构培训文档.md`（目录树）
+- `docs/modules/predict/AI预测核心模块-FastAPI算法引擎技术开发文档.md`：版本表与 requirements 片段
+  同步为 torch 2.5.1 / numpy 2.x，并补充三条版本约束说明
+
 ## [v3.2.1] - 2026-09-21
 
 ### 今日主题
@@ -239,3 +332,156 @@
 - 登录限流（5次失败锁定15分钟）
 - Token黑名单机制
 - Redis缓存验证码和限流数据
+
+---
+
+## [v3.0.0] - 2026-07-25
+
+### 新增
+
+- 微服务分离架构：Spring Boot业务中台 + FastAPI算法引擎
+- FastAPI独立项目：`synpharm-fastapi/` 目录，支持单独部署在GPU服务器
+- DTI预测服务：`DTIService` 药物-靶点相互作用预测
+- PPI预测服务：`PPIService` 蛋白质-蛋白质相互作用预测
+- DDI预测服务：`DDIService` 药物-药物相互作用预测
+- 批量预测接口：`/v1/predict/batch` 支持批量CSV处理
+- WebClient配置：Spring Boot调用FastAPI接口
+- PredictRequest DTO：类型安全的预测请求封装
+- CsvUtils工具类：CSV文件解析、写入、字段转义
+- 异步批量处理：`@Async` + ThreadPoolTaskExecutor
+- 进度缓存：ConcurrentHashMap内存维护任务状态
+- 健康检查接口：`/health/` 服务监控
+
+### 修改
+
+- PredictServiceImpl：从Mock数据改为调用FastAPI
+- BatchProcessServiceImpl：使用CsvUtils处理CSV文件
+- WebClientConfig：添加超时配置Bean
+- FastApiClient：注入超时配置，添加algo_type参数
+- CSV解析：支持引号包裹字段，处理含逗号数据
+- CSV写入：根据algoType动态生成列名
+
+### 修复
+
+- application.yml：合并重复的spring节点
+- FileReader：使用InputStreamReader指定UTF-8编码
+- Map参数：替换为PredictRequest DTO类型安全传递
+
+### 文档
+
+- 更新四个技术文档：总文档、登录模块、FastAPI模块、SpringBoot模块
+- 统一文档结构：模块概述、架构设计、API设计、代码实现、部署运行、测试方案、开发规范
+
+---
+
+## [v2.1.0] - 2026-07-20
+
+### 新增
+
+- 批量上传接口：`POST /api/batch/upload`
+- 进度查询接口：`GET /api/batch/progress/{batchId}`
+- 结果下载接口：`GET /api/batch/download/{batchId}`
+- BatchTask实体：批量任务数据库表
+- BatchTaskProgress：任务进度管理类
+- 分片处理：批量任务按CHUNK_SIZE分片调用FastAPI
+- Docker部署配置：支持GPU资源分配
+- Docker Compose：一键部署SpringBoot+FastAPI+MySQL
+
+### 修改
+
+- 异步线程池配置：核心线程2，最大线程5
+- 文件上传限制：50MB
+- FastAPI超时配置：单条60秒，批量600秒
+
+---
+
+## [v2.0.0] - 2026-07-15
+
+### 新增
+
+- DTI预测接口：`POST /api/predict/dti`
+- PPI预测接口：`POST /api/predict/ppi`
+- DDI预测接口：`POST /api/predict/ddi`
+- 预测历史接口：`GET /api/predict/history`
+- PredictRecord实体：预测记录数据库表
+- PredictService：预测服务接口
+- AlgoResponse DTO：FastAPI响应封装
+- PredictionMetrics DTO：预测指标封装
+- 结果存储：预测结果存入数据库
+
+### 修改
+
+- 项目结构调整：新增api/service/client/dto目录
+- 代码解耦：Controller-Service-Client分层
+
+---
+
+## [v1.5.0] - 2026-07-10
+
+### 新增
+
+- 用户注册接口：`POST /api/auth/register`
+- 用户信息接口：`GET /api/auth/profile`
+- JWT Token刷新机制
+- 用户状态管理：禁用/启用
+- 密码加密：BCryptPasswordEncoder
+- 全局异常处理：GlobalExceptionHandler
+- 参数校验：@Valid + @NotBlank
+
+### 修改
+
+- SecurityConfig：配置JWT过滤器
+- UserController：新增注册和查询接口
+- UserService：新增用户查询方法
+
+---
+
+## [v1.2.0] - 2026-07-05
+
+### 新增
+
+- 用户登录接口：`POST /api/auth/login`
+- JWT认证：java-jwt库集成
+- User实体：sys_user数据库表
+- UserMapper：MyBatis-Plus数据访问
+- UserService：用户服务接口
+- ApiResponse：统一响应封装
+- Spring Security配置：放行登录接口
+
+### 修改
+
+- pom.xml：添加java-jwt依赖
+- 数据库初始化：添加sys_user表
+
+---
+
+## [v1.1.0] - 2026-07-01
+
+### 新增
+
+- Spring Boot项目初始化
+- Maven依赖配置：web、webflux、security、mybatis-plus、mysql、lombok
+- application.yml：数据库连接配置
+- MyBatis-Plus配置：驼峰命名映射
+- 启动类：SynpharmApplication
+
+---
+
+## [v1.0.0] - 2026-06-25
+
+### 新增
+
+- 项目初始化：SynPharm AI预测核心模块
+- 技术文档：AI预测核心模块技术开发文档
+- 目录结构：docs/synpharm-backend/synpharm-fastapi
+- README.md：项目说明文档
+
+---
+
+[v3.0.0]: https://github.com/synpharm/synpharm/compare/v2.1.0...v3.0.0
+[v2.1.0]: https://github.com/synpharm/synpharm/compare/v2.0.0...v2.1.0
+[v2.0.0]: https://github.com/synpharm/synpharm/compare/v1.5.0...v2.0.0
+[v1.5.0]: https://github.com/synpharm/synpharm/compare/v1.2.0...v1.5.0
+[v1.2.0]: https://github.com/synpharm/synpharm/compare/v1.1.0...v1.2.0
+[v1.1.0]: https://github.com/synpharm/synpharm/compare/v1.0.0...v1.1.0
+[v1.0.0]: https://github.com/synpharm/synpharm/releases/tag/v1.0.0

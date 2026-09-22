@@ -19,12 +19,9 @@ import java.io.IOException;
  *   <li>处理失败 → basicNack(requeue=false)，消息进入死信队列 batch.task.dlq</li>
  * </ul>
  *
- * <p>【临时关闭】RabbitMQ 监听已暂时停用：
- * <ul>
- *   <li>@RabbitListener 已注释，方法不会被 Spring 注册为 MQ 消费端</li>
- *   <li>如需恢复，取消本方法 @RabbitListener 的注释，并同时恢复 RabbitConfig 中 @EnableRabbit 的注释，
- *       然后确保 application.yml 配置了 spring.rabbitmq.* 连接参数并启动 RabbitMQ 服务</li>
- * </ul>
+ * <p>【重要】本消费者是 {@code BatchProcessService#processBatch} 的唯一触发点。
+ * 一旦停用（@RabbitListener 被注释），批量上传只会写库+发消息而无人消费，
+ * 任务会永远停在 PENDING、进度不动、结果 CSV 不生成。
  *
  * @author SynPharm Team
  * @version 1.0.0
@@ -36,7 +33,7 @@ public class BatchTaskConsumer {
 
     private final BatchProcessService batchProcessService;
 
-    // @RabbitListener(queues = RabbitConfig.BATCH_QUEUE, ackMode = "MANUAL") // TODO 暂时关闭 RabbitMQ 监听：如需恢复，取消本行注释，并恢复 RabbitConfig 的 @EnableRabbit
+    @RabbitListener(queues = RabbitConfig.BATCH_QUEUE, ackMode = "MANUAL")
     public void onBatchTask(BatchTaskMessage message, Channel channel, Message amqpMessage) throws IOException {
         String batchId = message.getBatchId();
         String algoType = message.getAlgoType();

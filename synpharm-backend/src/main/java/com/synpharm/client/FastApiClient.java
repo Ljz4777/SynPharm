@@ -6,6 +6,7 @@ import com.synpharm.dto.request.PredictRequest;
 import com.synpharm.dto.response.AlgoResponse;
 import com.synpharm.dto.response.AlgorithmHealthResponse;
 import com.synpharm.dto.response.BatchPredictionResponse;
+import com.synpharm.dto.response.DdiDrugListResponse;
 import com.synpharm.exception.BusinessException;
 import com.synpharm.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -81,6 +82,31 @@ public class FastApiClient {
         } catch (Exception e) {
             log.error("FastAPI批量预测调用失败", e);
             throw new BusinessException(ErrorCode.PREDICT_ERROR, "批量预测服务不可用，请稍后重试");
+        }
+    }
+
+    /**
+     * 获取 DDI 可预测药物白名单（能力边界）。
+     *
+     * <p>DDI-LLM 是转导式模型，只能预测训练图内的药物；
+     * 该方法代理引擎的 {@code GET /v1/ddi/drugs}，供前端渲染可选药物下拉，
+     * 把"模型不支持"从"事后报错"变成"事前可见"。
+     */
+    public DdiDrugListResponse fetchDdiDrugs() {
+        log.info("调用FastAPI获取DDI药物白名单");
+        try {
+            return fastApiWebClient.get()
+                    .uri("/v1/ddi/drugs")
+                    .retrieve()
+                    .bodyToMono(DdiDrugListResponse.class)
+                    .timeout(singleTimeout)
+                    .block();
+        } catch (WebClientResponseException e) {
+            log.error("获取DDI药物白名单HTTP错误: status={}, body={}", e.getStatusCode(), e.getResponseBodyAsString());
+            throw translateError(e);
+        } catch (Exception e) {
+            log.error("获取DDI药物白名单调用失败", e);
+            throw new BusinessException(ErrorCode.PREDICT_ERROR, "算法引擎不可用，无法获取DDI药物白名单");
         }
     }
 

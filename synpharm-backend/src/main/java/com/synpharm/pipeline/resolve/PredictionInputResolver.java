@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
  * <ul>
  *   <li>DTI：输入A = 配体 SMILES，输入B = 靶点（序列 / UniProt ID / PDB 引用）</li>
  *   <li>PPI：输入A、B 各自为序列 / UniProt ID / PDB 引用</li>
- *   <li>DDI：输入A、B 均为 SMILES</li>
+ *   <li>DDI：输入A、B 均为 SMILES，随后由 {@link DdiDrugResolver} 翻译为模型要求的 DrugBank ID</li>
  * </ul>
  *
  * <p>输入类型语义：
@@ -37,6 +37,7 @@ public class PredictionInputResolver {
     private final UniProtResolver uniProtResolver;
     private final PdbResolver pdbResolver;
     private final ProteinSequenceValidator sequenceValidator;
+    private final DdiDrugResolver ddiDrugResolver;
 
     /**
      * 解析原始输入为标准化输入模型。
@@ -97,11 +98,17 @@ public class PredictionInputResolver {
             throw new PredictionException(PredictionErrorCode.INPUT_RESOLVE_FAILED,
                     "DDI 不支持 " + inputType + " 输入类型，请使用 smiles");
         }
+        // 先校验 SMILES 语法，再翻译成模型要求的 DrugBank ID。
+        // 用户手里只有 SMILES（DrugBank 页面复制的就是 SMILES），而 DDI-LLM 是转导式模型，
+        // 图节点标识是 DrugBank ID —— 两边语言不同，必须在这里翻译一次，
+        // 而不是要求用户改输入方式。翻译失败抛 DRUG_NOT_SUPPORTED（附支持药物数）。
+        String smilesA = validateSmiles(a);
+        String smilesB = validateSmiles(b);
         return ResolvedPredictionInput.builder()
                 .algoType("DDI")
                 .inputType(inputType)
-                .drugA(validateSmiles(a))
-                .drugB(validateSmiles(b))
+                .drugA(ddiDrugResolver.resolve(smilesA))
+                .drugB(ddiDrugResolver.resolve(smilesB))
                 .build();
     }
 

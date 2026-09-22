@@ -4,6 +4,7 @@ import com.synpharm.dto.request.DDIPredictRequest;
 import com.synpharm.dto.request.DTIPredictRequest;
 import com.synpharm.dto.request.GeneralPredictRequest;
 import com.synpharm.dto.request.PPIPredictRequest;
+import com.synpharm.dto.response.DdiDrugListResponse;
 import com.synpharm.dto.response.PredictResultResponse;
 
 import java.util.List;
@@ -25,4 +26,11 @@ public interface PredictService {
      * @return 预测历史列表
      */
     List<PredictResultResponse> getHistory(Long userId);
+
+    /**
+     * 获取 DDI 可预测药物白名单（模型能力边界）。
+     *
+     * @return 可预测药物列表；total 为 0 表示 DDI 权重未就绪
+     */
+    DdiDrugListResponse getDdiSupportedDrugs();
 }

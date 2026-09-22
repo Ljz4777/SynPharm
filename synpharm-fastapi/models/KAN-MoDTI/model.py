@@ -1,7 +1,11 @@
+import logging
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from kan import KAN
+
+logger = logging.getLogger(__name__)
 
 class FeatureFusionKAN(nn.Module):
     def __init__(self, feat_dim):
@@ -262,10 +266,16 @@ class KAN_MoDTI(nn.Module):
                     all_labels.append(label if label is not None else prediction)
                     all_predictions.append(prediction)
                     all_scores.append(score)
-                except:
+                except Exception as e:  # noqa: BLE001 —— 单条失败不该中断整批，但必须留下原因
+                    logger.warning("[KAN-MoDTI] 单条样本推理失败，已跳过: %s", e)
                     continue
             
             if not all_labels:
-                return [0], [0], [0.5]
-                
+                # 绝不返回兜底值：调用方无法区分它与真实结果，
+                # 会以 HTTP 200 + confidence 0.5 的形式把假结果一路写进报告。
+                raise RuntimeError(
+                    "KAN-MoDTI 推理失败：批次内没有任何样本成功完成前向计算。"
+                    "请检查 SMILES 是否可被 RDKit 解析、蛋白序列是否过短或含非法字符"
+                )
+
             return all_labels, all_predictions, all_scores

@@ -8,6 +8,8 @@ import com.synpharm.dto.request.DDIPredictRequest;
 import com.synpharm.dto.request.DTIPredictRequest;
 import com.synpharm.dto.request.GeneralPredictRequest;
 import com.synpharm.dto.request.PPIPredictRequest;
+import com.synpharm.client.FastApiClient;
+import com.synpharm.dto.response.DdiDrugListResponse;
 import com.synpharm.dto.response.PredictResultResponse;
 import com.synpharm.model.entity.PredictResult;
 import com.synpharm.model.entity.PredictTask;
@@ -34,6 +36,7 @@ public class PredictServiceImpl implements PredictService {
     private final PredictTaskMapper taskMapper;
     private final PredictResultMapper resultMapper;
     private final ObjectMapper objectMapper;
+    private final FastApiClient fastApiClient;
 
     @Override
     @Deprecated
@@ -220,6 +223,12 @@ public class PredictServiceImpl implements PredictService {
                 .description("由 FastAPI 算法引擎计算")
                 .source("fastapi")
                 .build();
+    }
+
+    @Override
+    public DdiDrugListResponse getDdiSupportedDrugs() {
+        // 白名单来自算法引擎（DDI-LLM 训练图内药物）；引擎不可用时由 FastApiClient 抛出业务异常
+        return fastApiClient.fetchDdiDrugs();
     }
 
     private List<PredictResultResponse.InteractionInfo> parseInteractions(String json) {

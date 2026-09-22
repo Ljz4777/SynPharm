@@ -24,7 +24,15 @@ public class BatchTaskItem {
     @TableField("batch_id")
     private String batchId;
 
-    @TableField("row_number")
+    /**
+     * CSV 行号（从 1 开始）。
+     *
+     * <p>列名必须带反引号：{@code ROW_NUMBER} 是 MySQL 8.0 的保留字
+     * （窗口函数）。建表脚本里已经加了反引号，但 MyBatis-Plus 是按本注解原样拼 SQL 的，
+     * 少了反引号会生成 {@code INSERT ... ( batch_id, row_number, ... )}，
+     * 直接报语法错误，导致批量上传 100% 失败。
+     */
+    @TableField("`row_number`")
     private Integer rowNumber;
 
     @TableField("input_value")

@@ -1,4 +1,9 @@
+import json
+import logging
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -22,8 +27,23 @@ class Settings(BaseSettings):
 
     @property
     def api_key_list(self) -> list[str]:
-        """将逗号分隔的 API Key 字符串解析为列表。"""
-        return [k.strip() for k in self.api_keys.split(",") if k.strip()]
+        """解析 API Key 列表，兼容三种写法。
+
+        历史坑：``.env.example`` 里给的是 JSON 数组 ``["k1","k2"]``，
+        而这里只按逗号切分，于是整个字符串被当成一个 Key，照抄模板必然全 401。
+        """
+        raw = (self.api_keys or "").strip()
+        if not raw:
+            return []
+        if raw.startswith("["):
+            try:
+                parsed = json.loads(raw)
+            except json.JSONDecodeError:
+                logger.warning("API_KEYS 以 [ 开头但不是合法 JSON，按逗号分隔处理")
+            else:
+                if isinstance(parsed, list):
+                    return [str(k).strip() for k in parsed if str(k).strip()]
+        return [k.strip() for k in raw.split(",") if k.strip()]
 
 
 settings = Settings()

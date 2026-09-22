@@ -21,13 +21,17 @@ class PredictionInputResolverTest {
     @Mock
     private PdbResolver pdbResolver;
 
+    @Mock
+    private DdiDrugResolver ddiDrugResolver;
+
     private PredictionInputResolver resolver;
 
     private static final String VALID_SEQUENCE = "MKWVTFISLLFLFSSAYSRGVFRRDTHKSEIAHRFKDLGEENFKALVLIAFAQYLQQCPFEDHVKLVNEVTEFAK";
 
     @BeforeEach
     void setUp() {
-        resolver = new PredictionInputResolver(uniProtResolver, pdbResolver, new ProteinSequenceValidator());
+        resolver = new PredictionInputResolver(uniProtResolver, pdbResolver,
+                new ProteinSequenceValidator(), ddiDrugResolver);
     }
 
     @Test
@@ -83,10 +87,37 @@ class PredictionInputResolverTest {
     }
 
     @Test
-    void DDI_smiles类型_校验通过() {
-        ResolvedPredictionInput input = resolver.resolve("DDI", "smiles", "CC(=O)OC1=CC=CC=C1C(=O)O,C1CCCCC1");
-        assertEquals("CC(=O)OC1=CC=CC=C1C(=O)O", input.getDrugA());
-        assertEquals("C1CCCCC1", input.getDrugB());
+    void DDI_smiles类型_翻译为DrugBankID() {
+        // 用户手里只有 SMILES，模型只认图内 DrugBank ID —— 转换层负责翻译
+        when(ddiDrugResolver.resolve("CC(=O)OC1=CC=CC=C1C(=O)O")).thenReturn("DB00945");
+        when(ddiDrugResolver.resolve("C1CCCCC1")).thenReturn("DB00006");
+
+        ResolvedPredictionInput input =
+                resolver.resolve("DDI", "smiles", "CC(=O)OC1=CC=CC=C1C(=O)O,C1CCCCC1");
+
+        assertEquals("DB00945", input.getDrugA());
+        assertEquals("DB00006", input.getDrugB());
+    }
+
+    @Test
+    void DDI_药物不在支持范围_抛出DRUG_NOT_SUPPORTED() {
+        when(ddiDrugResolver.resolve(anyString()))
+                .thenThrow(new PredictionException(PredictionErrorCode.DRUG_NOT_SUPPORTED, "不在支持范围内"));
+
+        PredictionException e = assertThrows(PredictionException.class,
+                () -> resolver.resolve("DDI", "smiles", "CCO,C1CCCCC1"));
+
+        assertEquals(PredictionErrorCode.DRUG_NOT_SUPPORTED, e.getErrorCode());
+    }
+
+    @Test
+    void DDI_SMILES语法非法_不进入转换层() {
+        // SMILES 括号不配平应在翻译之前就被拦下，不应该去查白名单
+        PredictionException e = assertThrows(PredictionException.class,
+                () -> resolver.resolve("DDI", "smiles", "C(,CC"));
+
+        assertEquals(PredictionErrorCode.INVALID_SMILES, e.getErrorCode());
+        verifyNoInteractions(ddiDrugResolver);
     }
 
     @Test

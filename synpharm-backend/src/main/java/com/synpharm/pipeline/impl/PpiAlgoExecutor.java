@@ -77,11 +77,20 @@ public class PpiAlgoExecutor implements AlgoExecutor {
 
     /**
      * 将 FastAPI 批量预测返回的平铺字段（snake_case）转换为统一的 AlgoResponse。
+     * <p>单行失败时引擎返回 {@code {"error": "..."}}，此时不填 metrics。
      */
     private AlgoResponse convertResult(Map<String, Object> result) {
         AlgoResponse response = new AlgoResponse();
-        response.setStatus("success");
         response.setAlgoType(AlgoType.PPI.getCode());
+
+        // 此前无条件 setStatus("success")，会把失败行当成成功结果
+        if (result.containsKey("error")) {
+            response.setStatus("error");
+            response.setErrorMessage(toStr(result.get("error")));
+            return response;
+        }
+
+        response.setStatus("success");
 
         AlgoResponse.PredictionMetrics metrics = new AlgoResponse.PredictionMetrics();
         metrics.setTargetId(toStr(result.get("target_id")));

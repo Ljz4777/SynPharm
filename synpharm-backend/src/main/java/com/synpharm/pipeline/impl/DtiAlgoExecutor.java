@@ -70,11 +70,20 @@ public class DtiAlgoExecutor implements AlgoExecutor {
      * 将 FastAPI 批量预测返回的平铺字段（snake_case）转换为统一的 AlgoResponse。
      * <p>FastAPI /v1/predict/batch 的每个结果形如：
      * {target_id, target_name, binding_affinity, confidence_score, confidence_level, interactions, ...输入字段}
+     * <p>单行失败时引擎返回 {@code {"error": "..."}}，此时不填 metrics。
      */
     private AlgoResponse convertResult(Map<String, Object> result) {
         AlgoResponse response = new AlgoResponse();
-        response.setStatus("success");
         response.setAlgoType(AlgoType.DTI.getCode());
+
+        // 此前无条件 setStatus("success")，会把失败行当成成功结果
+        if (result.containsKey("error")) {
+            response.setStatus("error");
+            response.setErrorMessage(toStr(result.get("error")));
+            return response;
+        }
+
+        response.setStatus("success");
 
         AlgoResponse.PredictionMetrics metrics = new AlgoResponse.PredictionMetrics();
         metrics.setTargetId(toStr(result.get("target_id")));

@@ -39,9 +39,17 @@ FastAPI算法引擎是 SynPharm AI预测核心模块的**无状态计算节点**
 | FastAPI | 0.104.x | Web框架 |
 | Uvicorn | 0.24.x | ASGI服务器 |
 | Pydantic | 2.5.x | 数据验证 |
-| PyTorch | 2.1.x | 深度学习框架 |
-| NumPy | 1.26.x | 数值计算 |
+| PyTorch | 2.5.x（CPU 版） | 深度学习框架，由 Dockerfile 单独安装 |
+| NumPy | 2.x | 数值计算 |
 | CUDA | 11.8+ | GPU加速（可选） |
+
+> **版本约束说明（必需）**：
+> - `transformers` 5.x 硬性要求 `torch >= 2.5`，低于该版本会直接**禁用 PyTorch 集成**，
+>   `AutoModel` 不可用，FlashPPI（PPI）会整个算法失效。
+> - `torch` 上限刻意停在 **2.5.x**：torch 2.6 起 `torch.load` 的 `weights_only` 默认改为 `True`，
+>   而本项目 DTI/DDI 的权重是整包 pickle，升到 2.6 会直接加载失败。
+> - `numpy` 统一到 2.x：项目的 DDI 权重文件本身是 numpy 2 时代保存的，
+>   锁在 1.26 会导致其反序列化失败（`No module named 'numpy._core'`）。
 
 ### 1.4 双模运行机制
 
@@ -343,12 +351,15 @@ class BatchPredictionResponse(BaseModel):
 fastapi==0.104.1
 uvicorn==0.24.0
 pydantic==2.5.0
-torch==2.1.0
-torchvision==0.16.0
-numpy==1.26.0
-pandas==2.1.0
-scikit-learn==1.3.0
+pydantic-settings==2.1.0
+# torch 不进 requirements：由 Dockerfile 从 PyTorch CPU wheel 源单独装 2.5.1+cpu
+numpy>=2.1,<3
+pandas>=2.2.3
+scikit-learn>=1.5.2
 python-multipart==0.0.6
+rdkit
+transformers>=5.0,<6
+einops>=0.7
 ```
 
 ### 4.2 main.py
@@ -794,7 +805,7 @@ async def health_check():
 | 依赖 | 版本 | 说明 |
 | :--- | :--- | :--- |
 | Python | 3.10+ | 运行环境 |
-| PyTorch | 2.1+ | 深度学习框架 |
+| PyTorch | 2.5.x（CPU 版） | 深度学习框架；由 Dockerfile 单独安装，见 1.3 节版本约束 |
 | CUDA | 11.8+ | GPU加速（可选） |
 
 ### 5.2 安装依赖

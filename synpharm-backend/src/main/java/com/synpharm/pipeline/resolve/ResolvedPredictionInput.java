@@ -12,7 +12,7 @@ import lombok.NoArgsConstructor;
  * <ul>
  *   <li>DTI：ligandSmiles + targetSequence</li>
  *   <li>PPI：proteinA + proteinB（均为解析后的氨基酸序列）</li>
- *   <li>DDI：drugA + drugB（均为校验后的 SMILES）</li>
+ *   <li>DDI：drugA + drugB（均为 {@link DdiDrugResolver} 翻译后的 DrugBank ID）</li>
  * </ul>
  * 说明：targetId / targetName 为结果侧字段（FastAPI 返回），不属于输入模型，
  * 落库时由 {@link com.synpharm.dto.response.PredictResultResponse} 携带。
@@ -44,9 +44,9 @@ public class ResolvedPredictionInput {
     /** PPI：蛋白质 B 序列（已解析/校验） */
     private String proteinB;
 
-    /** DDI：药物 A SMILES（已校验） */
+    /** DDI：药物 A 的 DrugBank ID（由用户输入的 SMILES 经 DdiDrugResolver 翻译而来） */
     private String drugA;
 
-    /** DDI：药物 B SMILES（已校验） */
+    /** DDI：药物 B 的 DrugBank ID（由用户输入的 SMILES 经 DdiDrugResolver 翻译而来） */
     private String drugB;
 }

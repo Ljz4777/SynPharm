@@ -4,6 +4,7 @@ import com.synpharm.dto.request.DDIPredictRequest;
 import com.synpharm.dto.request.DTIPredictRequest;
 import com.synpharm.dto.request.GeneralPredictRequest;
 import com.synpharm.dto.request.PPIPredictRequest;
+import com.synpharm.dto.response.DdiDrugListResponse;
 import com.synpharm.dto.response.PredictResultResponse;
 import com.synpharm.service.PredictService;
 import com.synpharm.utils.JwtUtils;
@@ -117,6 +118,24 @@ public class PredictController {
         Long userId = jwtUtils.getUserIdFromToken(token.replace("Bearer ", ""));
         PredictResultResponse response = predictService.predictDDI(request, userId);
         return Result.success(response);
+    }
+
+    /**
+     * DDI 可预测药物白名单接口（能力边界）。
+     *
+     * <p>DDI-LLM 为转导式模型，仅能预测训练图内的药物。前端可据此渲染可选药物下拉，
+     * 或对用户输入做前置校验，把"输入合法但模型不支持"从事后报错变成事前可见。
+     *
+     * @param token 请求头中的JWT令牌（Bearer格式）
+     * @return total + drugs（drugId / drugName）；total 为 0 表示 DDI 权重未就绪
+     */
+    @GetMapping("/ddi/drugs")
+    @Operation(summary = "DDI 可预测药物白名单",
+            description = "返回 DDI 模型训练图内的药物（DrugBank ID + 药名），total 为 0 表示权重未就绪")
+    public Result<DdiDrugListResponse> listDdiDrugs(@RequestHeader("Authorization") String token) {
+        // 仅做鉴权校验，结果不参与返回值
+        jwtUtils.getUserIdFromToken(token.replace("Bearer ", ""));
+        return Result.success(predictService.getDdiSupportedDrugs());
     }
 
     /**
