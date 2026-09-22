@@ -97,6 +97,7 @@
                   <span class="pc__range-val">{{ confidenceThreshold }}%</span>
                 </div>
                 <input v-model="confidenceThreshold" type="range" min="0" max="100" class="pc__range" />
+                <p class="pc__desc">结果低于该阈值时给出提示（前端判定，不改变引擎计算）</p>
               </div>
               <label class="pc__advanced-item pc__advanced-item--row">
                 <span class="pc__label">输出详细结果</span>
@@ -104,7 +105,7 @@
                   <input v-model="detailedOutput" type="checkbox" />
                   <span class="pc__checkbox-box"></span>
                 </span>
-                <span class="pc__desc">包含完整相互作用与可视化数据</span>
+                <span class="pc__desc">关闭后隐藏“相互作用分析”区块，只保留打分</span>
               </label>
             </div>
           </div>
@@ -242,14 +243,24 @@
       </section>
 
       <!-- ===== 预测结果 ===== -->
-      <section v-if="predictionResult" class="pc__panel">
+      <!-- 必须限定在"单条预测"页签内：此前只判 predictionResult，
+           切到批量/历史页签时结果面板仍会串出来（问题总账 G-06） -->
+      <section v-if="mode === 'single' && predictionResult" class="pc__panel">
         <div class="pc__card">
           <div class="pc__result-head">
             <div>
               <h3 class="pc__card-title">预测结果</h3>
               <span class="pc__result-time">{{ formatTime(predictionResult.createdAt) }}</span>
             </div>
-            <span class="pc__badge">{{ predictionResult.datasetInfo.name }}</span>
+            <div class="pc__result-badges">
+              <span class="pc__badge">{{ predictionResult.datasetInfo.name }}</span>
+              <!-- 置信度阈值来自“高级选项”，低于阈值时明确提示，
+                   避免用户误以为该结果“达标”（问题总账 G-02） -->
+              <span
+                v-if="belowConfidenceThreshold"
+                class="pc__badge pc__badge--warn"
+              >低于阈值 {{ confidenceThreshold }}%</span>
+            </div>
           </div>
 
           <div class="pc__result-grid">
@@ -298,7 +309,8 @@
             </div>
           </div>
 
-          <div class="pc__section">
+          <!-- detailedOutput 关闭时隐藏本区块，让“高级选项”真正生效（问题总账 G-02） -->
+          <div v-if="detailedOutput" class="pc__section">
             <h4 class="pc__section-title">相互作用分析</h4>
             <div class="pc__interactions">
               <div v-for="(it, i) in predictionResult.interactions" :key="i" class="pc__interaction">
@@ -321,9 +333,15 @@
           </div>
 
           <div class="pc__result-actions">
-            <button class="pc__btn pc__btn--secondary">
+            <!-- 此前这个按钮没有任何 @click，点了完全没反应（问题总账 G-01） -->
+            <button
+              class="pc__btn pc__btn--secondary"
+              :disabled="savingResult || savedResult || !predictionResult.id"
+              :title="predictionResult.id ? '' : '该结果没有 ID，无法收藏'"
+              @click="handleSaveResult"
+            >
               <svg class="pc__btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-              保存结果
+              {{ savedResult ? '已保存' : (savingResult ? '保存中…' : '保存结果') }}
             </button>
             <button class="predict__btn predict__btn--primary" @click="goToVisualization">
               <svg class="predict__btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -344,6 +362,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { predictApi, batchApi, type BatchStatus, type PredictResultResponse } from '@/api/predict'
+import { favoriteApi } from '@/api/favorite'
 import Sidebar from '@/components/Sidebar.vue'
 import type { PredictionResult } from '@/types'
 
@@ -363,6 +382,30 @@ const showAdvancedOptions = ref(false)
 const isLoading = ref(false)
 const predictionResult = ref<PredictionResult | null>(null)
 const predictError = ref('')
+const savingResult = ref(false)
+const savedResult = ref(false)
+
+/** 结果置信度是否低于“高级选项”里设定的阈值（纯前端判定，不改引擎计算） */
+const belowConfidenceThreshold = computed(() => {
+  const r = predictionResult.value
+  return r != null && r.confidenceScore < confidenceThreshold.value / 100
+})
+
+/** 收藏当前结果（对应后端 POST /api/favorites） */
+const handleSaveResult = async () => {
+  const r = predictionResult.value
+  if (!r || !r.id || savingResult.value || savedResult.value) return
+  savingResult.value = true
+  predictError.value = ''
+  try {
+    await favoriteApi.addFavorite(r.id, r.targetName ? `${r.targetName} 预测结果` : undefined)
+    savedResult.value = true
+  } catch (error: unknown) {
+    predictError.value = error instanceof Error ? error.message : '保存失败，请稍后重试'
+  } finally {
+    savingResult.value = false
+  }
+}
 const router = useRouter()
 const route = useRoute()
 
@@ -676,9 +719,15 @@ const startBatchPolling = (batchId: string) => {
         if (batchTimer) clearInterval(batchTimer)
         batchTimer = null
       }
-    } catch {
+    } catch (error: unknown) {
+      // 此前是空的 catch，轮询一旦失败就静默停表：进度条永久停在原地，
+      // 用户完全不知道发生了什么（问题总账 G-10）
       if (batchTimer) clearInterval(batchTimer)
       batchTimer = null
+      batchStatus.value = null
+      batchError.value = error instanceof Error
+        ? `进度查询失败：${error.message}`
+        : '进度查询失败，请稍后重试'
     }
   }, 2000)
 }
@@ -2199,6 +2248,20 @@ const goHistoryVisualization = (item: PredictResultResponse) => {
   color: $accent-color;
   font-size: $font-size-xs;
   font-weight: 600;
+}
+
+/* 结果区右上角的徽标容器（数据集名 + 低于阈值提示） */
+.pc__result-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-xs;
+  align-items: center;
+}
+
+/* 置信度低于"高级选项"设定阈值时的提示徽标 */
+.pc__badge--warn {
+  background: rgba(239, 68, 68, 0.12);
+  color: $error-color;
 }
 
 .pc__result-grid {

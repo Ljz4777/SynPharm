@@ -47,17 +47,84 @@ export interface PagedResult<T> {
   list: T[]
 }
 
+/** 统一预测请求（对应后端 GeneralPredictRequest） */
+export interface GeneralPredictRequest {
+  /** 输入类型；后端会按 algoType 决定怎么解析 */
+  inputType: 'smiles' | 'uniprot' | 'pdb' | 'csv'
+  algoType: 'DTI' | 'PPI' | 'DDI'
+  /** 后端支持 json / csv，实时预测固定用 json */
+  outputType?: 'json' | 'csv'
+  /** 逗号分隔的输入值，语义随 algoType 变化 */
+  inputValue: string
+  fileUrl?: string
+}
+
+/** DDI 可预测药物（白名单条目） */
+export interface DdiDrug {
+  drugId: string
+  drugName?: string | null
+}
+
+export interface DdiDrugListResponse {
+  total?: number
+  drugs?: DdiDrug[]
+}
+
+/**
+ * 统一预测入口。
+ *
+ * ⚠️ 后端已把 `/dti` `/ppi` `/ddi` 三个接口标注为 `@Deprecated`
+ * （`PredictController`），前端此前仍在调用它们（问题总账 A-04）。
+ * 这里统一改为 `/api/predict/general`，`inputValue` 均为逗号分隔：
+ *
+ * | 算法 | inputValue | 说明 |
+ * |---|---|---|
+ * | DTI | `SMILES,靶点` | 靶点可写 UniProt ID 或 PDB 引用，后端会自动嗅探并取序列 |
+ * | PPI | `蛋白序列A,蛋白序列B` | 必须是序列本身，不是蛋白名 |
+ * | DDI | `药物A,药物B` | 可传 SMILES（后端会转成 DrugBank ID）或直接传 DrugBank ID |
+ */
+function predictGeneral(data: GeneralPredictRequest): Promise<PredictResultResponse> {
+  return request.post<PredictResultResponse>('/api/predict/general', {
+    outputType: 'json',
+    ...data
+  })
+}
+
 export const predictApi = {
+  predictGeneral,
+
   predictDTI(data: DTIPredictRequest): Promise<PredictResultResponse> {
-    return request.post<PredictResultResponse>('/api/predict/dti', data)
+    return predictGeneral({
+      inputType: 'smiles',
+      algoType: 'DTI',
+      inputValue: `${data.smiles},${data.targetId}`
+    })
   },
 
   predictPPI(data: PPIPredictRequest): Promise<PredictResultResponse> {
-    return request.post<PredictResultResponse>('/api/predict/ppi', data)
+    return predictGeneral({
+      inputType: 'smiles',
+      algoType: 'PPI',
+      inputValue: `${data.proteinA},${data.proteinB}`
+    })
   },
 
   predictDDI(data: DDIPredictRequest): Promise<PredictResultResponse> {
-    return request.post<PredictResultResponse>('/api/predict/ddi', data)
+    return predictGeneral({
+      inputType: 'smiles',
+      algoType: 'DDI',
+      inputValue: `${data.drugASmiles},${data.drugBSmiles}`
+    })
+  },
+
+  /**
+   * DDI 可预测药物白名单（能力边界）。
+   *
+   * DDI-LLM 是转导式模型，只能预测训练图内的药物；据此可以渲染可选药物下拉，
+   * 或对用户输入做前置校验，把"模型不支持"从事后报错变成事前可见。
+   */
+  getDdiDrugs(): Promise<DdiDrugListResponse> {
+    return request.get<DdiDrugListResponse>('/api/predict/ddi/drugs')
   },
 
   /** 获取当前用户的预测历史列表（按创建时间倒序） */

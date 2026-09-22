@@ -22,7 +22,11 @@ batch_predictor = BatchPredictor()
 
 
 @router.post("/single", response_model=AlgoResponse)
-async def predict_single(req: SingleRequest):
+def predict_single(req: SingleRequest):
+    # 刻意用同步 def 而不是 async def（问题总账 E-06）：
+    # 推理是 CPU 密集的**阻塞**调用，写在 async 里会卡住事件循环，
+    # 连 /health 都响应不了，会被上游熔断器当成引擎故障。
+    # 写成 def 后 Starlette 会把它丢到线程池执行。
     logger.info(f"Single prediction request: algo_type={req.algo_type}")
     
     try:
@@ -64,7 +68,8 @@ async def predict_single(req: SingleRequest):
 
 
 @router.post("/batch", response_model=BatchPredictionResponse)
-async def predict_batch(req: BatchPredictionRequest):
+def predict_batch(req: BatchPredictionRequest):
+    # 同 predict_single：阻塞调用必须放到线程池，不能占着事件循环（E-06）
     logger.info(f"Batch prediction request: algo_type={req.algo_type}, size={len(req.data_list)}")
     
     if len(req.data_list) > settings.max_batch_size:

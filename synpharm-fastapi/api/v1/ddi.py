@@ -17,10 +17,13 @@ router = APIRouter()
 
 
 @router.get("/drugs", response_model=DdiDrugListResponse)
-async def list_ddi_drugs():
+def list_ddi_drugs():
     """列出 DDI 模型训练图内的全部药物（DrugBank ID + 药名）。
 
     返回 `total: 0` 表示 DDI 权重未就绪（此时 `/v1/predict/single` 的 DDI 分支会返回 404）。
+
+    <p>用同步 `def`：首次调用会触发权重加载，是阻塞操作，
+    写在 `async def` 里会卡住事件循环（同问题总账 E-06）。
     """
     index = get_ddi_drug_index()
     drugs = [DdiDrug(drug_id=k, drug_name=(v or None)) for k, v in index.items()]

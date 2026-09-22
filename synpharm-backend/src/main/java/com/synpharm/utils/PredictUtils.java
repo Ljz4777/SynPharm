@@ -35,16 +35,18 @@ public class PredictUtils {
     public List<PredictResultResponse> predict(PredictTask task) {
         String predictType = task.getPredictType();
         
-        switch (predictType) {
-            case "dti":
-                return predictDTI(task);
-            case "ppi":
-                return predictPPI(task);
-            case "ddi":
-                return predictDDI(task);
-            default:
-                throw new IllegalArgumentException("未知的预测类型: " + predictType);
-        }
+        // ⚠️ 不再返回 Random 生成的假结果（问题总账 C-05）。
+        //
+        // 原先这里按 predictType 分发到 predictDTI/predictPPI/predictDDI，三者都用
+        // random.nextDouble() 编造靶点、亲和力、置信度和相互作用 —— 调用方
+        // （TaskServiceImpl#executeTask）拿到的是一份"看起来完全正常"的随机报告。
+        // 真正的预测早已由 PipelineFactory / PredictService 走 FastAPI 算法引擎。
+        //
+        // 这里改成直接抛错：任何误用都会立刻暴露，而不是静默产出假数据。
+        // 下面三个私有方法已不可达，留待专门的清理提交连同本类一起删除。
+        throw new UnsupportedOperationException(
+                "PredictUtils#predict 已弃用：它产出的是 Random 假数据，"
+                        + "请改用 PipelineFactory / PredictService 调用真实算法引擎");
     }
 
     /**

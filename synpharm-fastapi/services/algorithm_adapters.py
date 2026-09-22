@@ -19,6 +19,7 @@ import csv
 import importlib.util
 import logging
 import sys
+import time
 from pathlib import Path
 
 import torch
@@ -69,17 +70,89 @@ def _load_module(module_name: str, file_path: Path):
     sys.modules[module_name] = module
     spec.loader.exec_module(module)
     return module
+# 加载失败后的冷却时间（秒）。
+#
+# 此前加载失败会把 None 永久写进 _cache，导致：补上权重后**必须重启容器**才能恢复
+# （问题总账 E-02）。现在改为冷却期内不重试、冷却过后自动重试：
+#   * 既避免每个请求都触发一次昂贵的加载（PPI 权重 2.8GB）
+#   * 又能让"补齐权重/依赖后自愈"
+_LOAD_FAIL_TTL = 300.0
+
+# 各算法的权重文件（相对 MODELS_DIR），用于健康检查做**廉价**的就绪探测
+_WEIGHT_FILES: dict[str, tuple[str, ...]] = {
+    "dti": ("KAN-MoDTI", "weights", "human_final.pth"),
+    "ddi": ("DDI-LLM", "weights", "ddi_gcn_morgan.pt"),
+    "ppi": ("FlashPPI", "weights", "model.safetensors"),
+}
+
+# key -> (失败时刻 monotonic, 错误摘要)
+_load_failures: dict[str, tuple[float, str]] = {}
 
 
 def _get_or_load(key: str, loader):
-    """懒加载 + 缓存（缓存 None 表示加载失败，不重试）。"""
-    if key not in _cache:
-        try:
-            _cache[key] = loader()
-        except Exception as e:  # noqa: BLE001 —— 兜底，任何异常都缓存 None
-            logger.warning("加载 %s 失败: %s", key, e)
-            _cache[key] = None
-    return _cache[key]
+    """懒加载 + 缓存；加载失败只冷却 `_LOAD_FAIL_TTL` 秒，冷却过后允许重试。"""
+    cached = _cache.get(key)
+    if cached is not None:
+        return cached
+
+    failure = _load_failures.get(key)
+    if failure is not None and (time.monotonic() - failure[0]) < _LOAD_FAIL_TTL:
+        # 冷却期内直接返回失败，不重复触发昂贵加载
+        return None
+
+    try:
+        obj = loader()
+        err = ""
+    except Exception as e:  # noqa: BLE001 —— 兜底，任何异常都视为加载失败
+        logger.warning("加载 %s 失败: %s", key, e)
+        obj, err = None, f"{type(e).__name__}: {e}"
+
+    if obj is None:
+        if not err:
+            err = "加载器返回 None（权重缺失或依赖不可用）"
+        _load_failures[key] = (time.monotonic(), err)
+        logger.warning("标记 %s 加载失败，%d 秒后允许重试: %s", key, int(_LOAD_FAIL_TTL), err)
+        return None
+
+    _cache[key] = obj
+    _load_failures.pop(key, None)
+    return obj
+
+
+def get_model_status() -> dict:
+    """各算法的就绪状态，供 `/health` 使用（问题总账 E-01）。
+
+    刻意**不触发加载**：PPI 权重 2.8GB，而健康检查每 30 秒跑一次，
+    真加载会把探活变成重活。这里只做两件廉价的事：
+
+    1. 权重文件是否存在（历史上 PPI 不可用就是权重缺失 / 依赖错位）
+    2. 若已尝试过加载，报告其失败原因
+
+    state 取值：
+      * ``ready``          —— 已成功加载
+      * ``weights_missing``—— 权重文件不存在
+      * ``load_failed``    —— 权重在但加载报错（依赖缺失等）
+      * ``not_loaded``     —— 权重在、尚未被触发加载（正常，不箨降级）
+    """
+    status: dict = {}
+    for key, parts in _WEIGHT_FILES.items():
+        path = MODELS_DIR.joinpath(*parts)
+        present = path.exists()
+        if _cache.get(key) is not None:
+            state = "ready"
+        elif not present:
+            state = "weights_missing"
+        elif key in _load_failures:
+            state = "load_failed"
+        else:
+            state = "not_loaded"
+        status[key] = {
+            "state": state,
+            "weights_path": str(path),
+            "weights_present": present,
+            "error": (_load_failures.get(key) or (None, None))[1],
+        }
+    return status
 
 
 # --------------------------------------------------------------------------- #

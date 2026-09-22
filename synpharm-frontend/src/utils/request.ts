@@ -54,9 +54,56 @@ service.interceptors.response.use(
     if (axios.isAxiosError(error) && error.response?.status === 401) {
       handleAuthFailure(error.config)
     }
-    return Promise.reject(error)
+    return Promise.reject(toFriendlyError(error))
   }
 )
+
+/**
+ * 把 axios 的原始错误转成"带后端原因"的 Error。
+ *
+ * 此前直接把 axios 错误原样抛出，调用方只能拿到
+ * `Request failed with status code 400`，**后端精心写的中文原因 100% 丢失**
+ * （问题总账 D-04）。例如 DDI 传了图外药物时，后端返回的是
+ * "药物不在 DDI-LLM 训练图内（图内共 1323 个药物）…"，
+ * 用户却只看到一句英文的 status code。
+ *
+ * 现在优先使用响应体里的 message（后端 `Result` 结构为 { code, errorCode, message, data }），
+ * 并顺带把 errorCode 与 HTTP 状态码挂到 Error 上，供调用方做更精细的判断。
+ */
+export interface ApiError extends Error {
+  /** HTTP 状态码（网络层失败时为 undefined） */
+  status?: number
+  /** 后端字符串错误码，如 DRUG_NOT_SUPPORTED / SEQUENCE_TOO_SHORT */
+  errorCode?: string
+  /** 原始 axios 错误，排查用 */
+  raw?: unknown
+}
+
+function toFriendlyError(error: unknown): ApiError {
+  if (!axios.isAxiosError(error)) {
+    return error instanceof Error ? error : new Error(String(error))
+  }
+
+  const status = error.response?.status
+  const data = error.response?.data
+
+  let payload: { message?: unknown; errorCode?: unknown } | undefined
+  if (data && typeof data === 'object' && !(data instanceof Blob)) {
+    payload = data as { message?: unknown; errorCode?: unknown }
+  }
+
+  const backendMessage = typeof payload?.message === 'string' ? payload.message : ''
+  // 无响应体（后端没起来 / 超时 / CORS）时给一句能看懂的话，而不是英文的 status code
+  const fallback = error.response
+    ? `请求失败（HTTP ${status ?? '未知'}）`
+    : '网络异常，请检查服务是否已启动'
+
+  const friendly = new Error(backendMessage || fallback) as ApiError
+  friendly.status = status
+  friendly.errorCode = typeof payload?.errorCode === 'string' ? payload.errorCode : undefined
+  friendly.raw = error
+  return friendly
+}
 
 /**
  * 统一处理认证失败：只有当"请求时的 token"与"当前 store 的 token"一致时，
