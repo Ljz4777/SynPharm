@@ -39,10 +39,23 @@ const props = withDefaults(
     pdbId: string
     autoRotate?: boolean
     showGrid?: boolean
+    /**
+     * 结合口袋几何（仅工作台「口袋」页签传入）。
+     * 有值时绘制线框球表示口袋腔体（binding_pocket.center / radius 的可视化）；
+     * 为 null 时清除。不传的页面完全不受影响。
+     */
+    pocket?: {
+      center: { x: number; y: number; z: number }
+      radius: number
+    } | null
+    /** 是否单独把共结晶配体渲染成球棍（与主显示模式无关） */
+    showLigand?: boolean
   }>(),
   {
     autoRotate: false,
     showGrid: false,
+    pocket: null,
+    showLigand: false,
   }
 )
 
@@ -112,6 +125,16 @@ let initialCameraState: {
 let gridAxisRepr: any = null
 let gridPlaneRepr: any = null
 let gridTickRepr: any = null
+
+/* =========================================================
+ * Pocket State (Mol* native Shape)
+ *
+ * pocketRepr        — 口袋腔体线框球
+ * ligandComponent   — 共结晶配体分量（仅开启时才创建；其 representation 随分量一起删除）
+ * ========================================================= */
+
+let pocketRepr: any = null
+let ligandComponent: any = null
 
 interface GridBounds {
   center: [number, number, number]
@@ -246,6 +269,10 @@ async function initMolstar(): Promise<void> {
     console.log('[Molstar] Plugin initialized')
 
     await loadStructure(props.pdbId)
+
+    /* 口袋页签可能在初始化时就已经带了口袋/配体需求 */
+    if (props.pocket) await syncPocket()
+    if (props.showLigand) await syncLigand()
 
   } catch (err) {
     console.error(
@@ -1027,6 +1054,164 @@ function removeAllGrids(): void {
   removeOneGrid(gridTickRepr);  gridTickRepr = null
 }
 
+/* =========================================================
+ * 结合口袋腔体（工作台口袋页签专属）
+ *
+ * 用线框球表现口袋空腔，而不是实体球：不遮挡口袋内部，
+ * 同时能让人直接读出 binding_pocket.center / radius 的尺度。
+ * 复用网格的 Line 通道（ensureGridModules 已加载所需模块）。
+ * ========================================================= */
+
+/** 琥珀色，对应 $warning-color，与网格（灰蓝）和坐标轴（红绿蓝）区分 */
+const POCKET_COLOR: [number, number, number] = [245, 158, 11]
+
+/** 经线数 / 纬线数 / 每圈段数：兼顾形状可辨认与线数可控 */
+const POCKET_MERIDIANS = 10
+const POCKET_PARALLELS = 6
+const POCKET_SEGMENTS = 40
+
+function createPocketRepr(
+  center: { x: number; y: number; z: number },
+  radius: number,
+): any {
+  const lineCount =
+    POCKET_MERIDIANS * POCKET_SEGMENTS + POCKET_PARALLELS * POCKET_SEGMENTS
+
+  // LinesBuilder 会按 chunkSize 自动扩容，这里给个够用的初值即可
+  const builder = _LinesBuilder.create(lineCount, lineCount * 2)
+
+  const { x: cx, y: cy, z: cz } = center
+  const TAU = Math.PI * 2
+
+  /* 经线：固定 phi，t 绕一圈（含两个极点） */
+  for (let m = 0; m < POCKET_MERIDIANS; m++) {
+    const phi = (Math.PI * m) / POCKET_MERIDIANS
+    const sinPhi = Math.sin(phi)
+    const cosPhi = Math.cos(phi)
+    const y = cy + radius * cosPhi
+
+    for (let s = 0; s < POCKET_SEGMENTS; s++) {
+      const t0 = (TAU * s) / POCKET_SEGMENTS
+      const t1 = (TAU * (s + 1)) / POCKET_SEGMENTS
+      builder.add(
+        cx + radius * sinPhi * Math.cos(t0), y, cz + radius * sinPhi * Math.sin(t0),
+        cx + radius * sinPhi * Math.cos(t1), y, cz + radius * sinPhi * Math.sin(t1),
+        0,
+      )
+    }
+  }
+
+  /* 纬线：固定 phi（跳过两个极点，避免退化成一个点） */
+  for (let p = 1; p <= POCKET_PARALLELS; p++) {
+    const phi = (Math.PI * p) / (POCKET_PARALLELS + 1)
+    const r = radius * Math.sin(phi)
+    const y = cy + radius * Math.cos(phi)
+
+    for (let s = 0; s < POCKET_SEGMENTS; s++) {
+      const t0 = (TAU * s) / POCKET_SEGMENTS
+      const t1 = (TAU * (s + 1)) / POCKET_SEGMENTS
+      builder.add(
+        cx + r * Math.cos(t0), y, cz + r * Math.sin(t0),
+        cx + r * Math.cos(t1), y, cz + r * Math.sin(t1),
+        0,
+      )
+    }
+  }
+
+  const lines = builder.getLines()
+  if (lines.lineCount === 0) return null
+
+  return linesToRepr(
+    lines,
+    'Binding Pocket',
+    () => _Color.fromRgb(...POCKET_COLOR),
+    0.5,
+    1.6,
+  )
+}
+
+/** 同步口袋腔体：pocket 为空则清除；结构或口袋切换后需重新调用 */
+async function syncPocket(): Promise<void> {
+  const p = plugin
+  if (!p?.canvas3d) return
+
+  removeOneGrid(pocketRepr)
+  pocketRepr = null
+
+  const pocket = props.pocket
+  if (!pocket) {
+    if (currentPdbId) p.canvas3d.requestDraw()
+    return
+  }
+
+  if (!(await ensureGridModules())) return
+
+  try {
+    pocketRepr = createPocketRepr(pocket.center, pocket.radius)
+    if (pocketRepr) p.canvas3d.add(pocketRepr)
+    p.canvas3d.requestDraw()
+  } catch (err) {
+    console.error('[Pocket] 腔体创建失败:', err)
+  }
+}
+
+/* =========================================================
+ * 共结晶配体渲染
+ *
+ * 做法：从结构里取出 ligand 静态分量，单独加一层球棍表示。
+ * 这样即使主显示模式是「卡通」，配体也始终可见。
+ *
+ * 注意：只能显示晶体结构里**已有**的配体；
+ * 候选分子的对接构象需要对接引擎（当前未部署）。
+ * ========================================================= */
+
+async function syncLigand(): Promise<void> {
+  const p = plugin
+
+  /* 先清掉旧的，避免反复切换时堆叠 */
+  if (ligandComponent && p) {
+    try {
+      await p.runTask(
+        p.state.data.updateTree(
+          p.build().delete(ligandComponent.ref)
+        )
+      )
+    } catch (err) {
+      console.warn('[Pocket] 清理旧配体失败:', err)
+    }
+  }
+  ligandComponent = null
+
+  if (!p || !props.showLigand || !mainStructure) return
+
+  try {
+    const component = await p.builders.structure.tryCreateComponentStatic(
+      mainStructure,
+      'ligand',
+      { label: '配体' },
+    )
+
+    if (!component) {
+      console.warn('[Pocket] 该结构中没有共结晶配体')
+      return
+    }
+
+    ligandComponent = component
+
+    await p.builders.structure.representation.addRepresentation(
+      component,
+      {
+        type: 'ball-and-stick',
+        color: 'element-symbol',
+      } as any
+    )
+
+    p.canvas3d?.requestDraw()
+  } catch (err) {
+    console.error('[Pocket] 配体渲染失败:', err)
+  }
+}
+
 /* -----------------------------------------
  * 可见性
  * ----------------------------------------- */
@@ -1416,7 +1601,33 @@ watch(
     ) {
 
       await loadStructure(newId)
+
+      /* 结构换了，口袋腔体与配体都要按新结构重建 */
+      if (props.pocket) await syncPocket()
+      if (props.showLigand) await syncLigand()
     }
+  }
+)
+
+/* =========================================================
+ * Watch Pocket / Ligand
+ *
+ * 两个入口都不是必须的，不传就不生效，因此现有页面（如 3D 可视化页）
+ * 不会因为本次扩展而产生任何行为变化。
+ * ========================================================= */
+
+watch(
+  () => props.pocket,
+  () => {
+    void syncPocket()
+  },
+  { deep: true }
+)
+
+watch(
+  () => props.showLigand,
+  () => {
+    void syncLigand()
   }
 )
 
@@ -1467,6 +1678,11 @@ onMounted(() => {
 onBeforeUnmount(() => {
 
   removeAllGrids()
+
+  /* 口袋腔体是 canvas3d 上的独立 representation，需显式移除 */
+  removeOneGrid(pocketRepr)
+  pocketRepr = null
+  ligandComponent = null
 
   stopAutoRotate()
 

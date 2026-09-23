@@ -39,6 +39,8 @@
           :pdb-id="pocket.structureRef"
           :auto-rotate="autoRotate"
           :show-grid="showGrid"
+          :pocket="pocketGeometry"
+          :show-ligand="showLigand"
           @structure-loaded="onStructureLoaded"
         />
         <div v-else class="pv__empty">当前项目未检测到结合口袋</div>
@@ -152,7 +154,8 @@
         </div>
 
         <p class="pv__note">
-          结构来自 RCSB PDB；候选分子的对接构象需要对接引擎（当前未部署），故暂不显示配体姿态。
+          结构来自 RCSB PDB；橙色线框球为检测到的结合口袋空腔（中心 / 半径）。
+          配体只能显示晶体结构中<strong>已有</strong>的共结晶配体；候选分子的对接构象需要对接引擎（当前未部署）。
         </p>
       </aside>
     </div>
@@ -201,7 +204,7 @@ const molstarRef = ref<MolstarHandle | null>(null)
 
 type DisplayMode = 'cartoon' | 'sphere' | 'stick' | 'surface'
 type ColorScheme = 'chain' | 'element' | 'secondary' | 'uniform'
-type SettingKey = 'showGrid' | 'autoRotate' | 'showLabels'
+type SettingKey = 'showGrid' | 'autoRotate' | 'showLabels' | 'showPocket' | 'showLigand'
 
 /** 与 MolstarViewer 内部的表示类型对应（取值与既有 3D 可视化页保持一致） */
 const MOLSTAR_REP_TYPES: Record<DisplayMode, string> = {
@@ -233,6 +236,8 @@ const COLOR_SCHEMES: Array<{ value: ColorScheme; label: string; preview: string 
 ]
 
 const SETTINGS: Array<{ key: SettingKey; label: string }> = [
+  { key: 'showPocket', label: '口袋腔体' },
+  { key: 'showLigand', label: '共结晶配体' },
   { key: 'showGrid', label: '显示网格' },
   { key: 'autoRotate', label: '自动旋转' },
   { key: 'showLabels', label: '显示标签' }
@@ -243,10 +248,30 @@ const colorScheme = ref<ColorScheme>('chain')
 const showGrid = ref(false)
 const autoRotate = ref(false)
 const showLabels = ref(false)
+/* 口袋腔体与配体默认开启：进页签就能看到该口袋的空间范围与已知配体 */
+const showPocket = ref(true)
+const showLigand = ref(true)
 const exporting = ref(false)
 
-const flagOf = (key: SettingKey): boolean =>
-  key === 'showGrid' ? showGrid.value : key === 'autoRotate' ? autoRotate.value : showLabels.value
+const flagOf = (key: SettingKey): boolean => {
+  if (key === 'showGrid') return showGrid.value
+  if (key === 'autoRotate') return autoRotate.value
+  if (key === 'showLabels') return showLabels.value
+  if (key === 'showPocket') return showPocket.value
+  return showLigand.value
+}
+
+/**
+ * 交给 MolstarViewer 的口袋几何；为 null 即不画腔体线框球。
+ *
+ * 用 props 而非命令式方法，是为了让「切换口袋 → 重建腔体」完全由响应式驱动，
+ * 避免在多处手动调用重建逻辑。
+ */
+const pocketGeometry = computed(() =>
+  showPocket.value && pocket.value
+    ? { center: pocket.value.center, radius: pocket.value.radius }
+    : null
+)
 
 /* ------------------------------ 口袋数据 ------------------------------ */
 
@@ -307,8 +332,17 @@ function toggleSetting(key: SettingKey, value: boolean): void {
     autoRotate.value = value
     return
   }
-  showLabels.value = value
-  nextTick(() => molstarRef.value?.setLabelsVisible(value))
+  if (key === 'showLabels') {
+    showLabels.value = value
+    nextTick(() => molstarRef.value?.setLabelsVisible(value))
+    return
+  }
+  // 口袋腔体与配体走 props，MolstarViewer 内部的 watch 会负责重建
+  if (key === 'showPocket') {
+    showPocket.value = value
+    return
+  }
+  showLigand.value = value
 }
 
 async function handleExport(): Promise<void> {
