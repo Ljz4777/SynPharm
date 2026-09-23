@@ -8,7 +8,7 @@
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2-green.svg)](https://spring.io/projects/spring-boot)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.104-teal.svg)](https://fastapi.tiangolo.com/)
 [![Vue](https://img.shields.io/badge/Vue-3.5-brightgreen.svg)](https://vuejs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.6-blue.svg)](https://www.typescriptlang.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue.svg)](https://www.typescriptlang.org/)
 [![RabbitMQ](https://img.shields.io/badge/RabbitMQ-3.13-orange.svg)](https://www.rabbitmq.com/)
 [![Docker](https://img.shields.io/badge/Docker-Compose-blue.svg)](https://www.docker.com/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -25,12 +25,15 @@
 
 平台采用 **SpringBoot 业务中台 + FastAPI 算法引擎 + Vue3 前端** 的三端分离架构，提供完整的用户认证体系、单条实时预测、**RabbitMQ 消息队列驱动的批量预测**、结果与任务管理、3D 可视化与靶点库等功能，适用于药物研发辅助、学术研究和教学演示场景。
 
+在预测能力之上，项目规划了**干实验药物设计平台**：第一阶段先把可手工操作的工具做成一个类 IDE 的**设计工作台**（画布 / 候选 / 对比 / 口袋），第二阶段再用多智能体体系把这些工具串成自动化闭环。工作台现已可用（2D 编辑器由独立子应用承载、3D 结构视图由 Molstar 承载），后端接口尚未落地，当前由可切换的内置演示数据驱动。
+
 ### ✨ 核心特性
 
 - 🔬 **三大预测类型** — 支持 DTI / PPI / DDI，单条实时预测 + 批量 CSV 预测
 - 📨 **RabbitMQ 异步批处理** — 消息持久化、死信队列、幂等消费、任务状态以 DB 为权威
 - 🔐 **多策略用户认证** — 邮箱验证码 / 密码 / 游客登录，JWT 无状态认证、登录限流、Token 黑名单
 - 🧬 **3D 可视化** — 交互式分子结构展示（卡通 / 球体 / 棍状 / 表面）
+- ⚗️ **干实验设计工作台** — 三栏 IDE（画布 / 候选 / 对比 / 口袋），2D 分子编辑器 + 3D 口袋腔体与配体 + 候选分子引擎实算
 - 🎯 **靶点库** — 按靶点类型 / 蛋白家族 / 主要通路 / 疾病领域精细分类
 - 🚀 **Docker Compose 一键部署** — MySQL / Redis / RabbitMQ / 后端 / FastAPI / 前端 6 服务
 
@@ -72,6 +75,9 @@
 | Vue Router | 4.x | 路由管理 |
 | Element Plus | 2.x | UI 组件库 |
 | Axios | 1.x | HTTP 客户端 |
+| **Ketcher** | 3.18 | 2D 分子编辑器（内置 Indigo 化学引擎，以独立子应用 + iframe 隔离） |
+| Molstar | 5.11 | 蛋白质 3D 结构渲染（卡通 / 球棍 / 表面、口袋腔体、共结晶配体） |
+| ECharts | 5.5 | 轮次趋势与统计图表 |
 
 ---
 
@@ -125,12 +131,13 @@ SynPharm/
 │   └── services/                  # dti / ppi / ddi / batch 推理服务
 │
 ├── synpharm-frontend/             # 前端应用（Vue3）
+│   ├── ketcher-app/               # 2D 分子编辑器独立子应用（产物输出到 public/ketcher）
 │   └── src/
-│       ├── api/                   # 请求层（auth/predict/batch）
-│       ├── components/            # 公共组件（Sidebar/ResultCard）
-│       ├── router/ stores/        # 路由 / 状态管理
-│       ├── types/ utils/          # 类型 / 工具
-│       └── views/                 # 页面（Home/Login/Dashboard/Predict/Results/Tasks/Targets/Visualization/Profile）
+│       ├── api/                   # 请求层（auth/predict/batch + design 门面与生成式 mock）
+│       ├── components/            # 公共组件（Sidebar/ResultCard/protein/design）
+│       ├── router/ stores/        # 路由 / 状态管理（含 design store）
+│       ├── types/ utils/          # 类型 / 工具（含 design 契约）
+│       └── views/                 # 页面（Home/Login/Dashboard/Predict/Results/Tasks/Targets/Visualization/Design/Profile）
 │
 ├── deploy/                        # 部署
 │   ├── docker-compose.yml         # 6 服务编排（mysql/redis/rabbitmq/backend/fastapi/frontend）
@@ -138,7 +145,10 @@ SynPharm/
 │   ├── 环境配置说明.md            # 环境配置、一键启动与排障
 │   └── scripts/                   # 一键启停脚本（start/stop）
 │
-└── docs/                          # 技术文档（架构/部署/接口/模块）
+└── docs/                          # 技术文档
+    ├── api/ architecture/ deploy/ # 接口 / 架构 / 部署
+    ├── modules/{auth,predict,design}  # 模块设计文档
+    └── development/               # 问题总账 / 待办清单 / 阶段规划
 ```
 
 ---
@@ -192,11 +202,16 @@ cd synpharm-fastapi
 pip install -r requirements.txt
 uvicorn main:app --host 0.0.0.0 --port 8000
 
-# 前端
+# 前端（开发端口 5174）
 cd synpharm-frontend
 npm install
-npm run dev   # http://localhost:5173
+npm run build:ketcher   # 首次必需：构建 2D 分子编辑器子应用 → public/ketcher
+npm run dev             # http://localhost:5174
 ```
+
+> 前端开发态默认使用**内置演示数据**（`VITE_DESIGN_MOCK=true`），不启后端也能打开设计工作台；
+> 接真实后端时把 `.env` 的 `VITE_API_BASE_URL` 指向后端端口（与 `deploy/.env` 的 `BACKEND_PORT` 保持一致），
+> 并置 `VITE_DESIGN_MOCK=false`。
 
 ---
 
@@ -254,6 +269,23 @@ npm run dev   # http://localhost:5173
 | POST | `/v1/predict/single` | 单条推理 |
 | POST | `/v1/predict/batch` | 批量推理 |
 
+### 设计工作台（规划中，前端已按此契约实现，尚未有后端）
+
+| 方法 | 路径 | 说明 |
+| :--- | :--- | :--- |
+| GET | `/api/design/projects/{id}/tree` | 项目树（靶点 / 口袋 / 约束 / 轮次 / 生成任务） |
+| GET | `/api/design/candidates/ranked` | 候选分子列表（筛选 / 排序 / 分页） |
+| GET | `/api/design/molecules/{id}/metrics` | 单分子指标与逐条约束判定 |
+| GET | `/api/design/metrics/meta` | 指标定义表（驱动评估面板） |
+| GET/PUT | `/api/design/workspace` | 工作台视图状态（可跨设备恢复） |
+| GET | `/api/design/commands` | 命令注册表（写操作唯一入口） |
+| GET | `/api/design/capabilities` | 可用计算能力（用于降级可见） |
+| POST | `/api/design/generations` | 触发候选生成 |
+| POST | `/api/design/molecules/{parentMolId}/edit` | 保存编辑产物（保留父子谱系） |
+
+> 上述端点**尚未在后端实现**，前端 `src/api/design.ts` 已按此契约实现并默认走内置演示数据；
+> 完整契约与库表（DDL 编号 `11_` ~ `25_`）见 [`docs/modules/design/`](docs/modules/design)。
+
 ---
 
 ## 🗄️ 数据库设计
@@ -268,6 +300,10 @@ npm run dev   # http://localhost:5173
 | `predict_result` | 预测结果表 |
 | `user_favorite` | 用户收藏表 |
 | `batch_task` | 批量任务表（含 `algo_type`、`deleted`，状态 0待处理/1处理中/2成功/3失败） |
+
+> ⚠️ **设计工作台的库表尚未落地**。其 DDL 已在 [`docs/modules/design/`](docs/modules/design)
+> 中设计完毕（编号 `11_` ~ `25_`，覆盖项目 / 靶点 / 口袋 / 约束 / 生成 / 编辑 / 评估 / 工作台状态），
+> 待后端开发时按文档建表；当前前端不依赖数据库。
 
 ---
 
@@ -376,6 +412,12 @@ npm run build
 | SpringBoot 预测核心模块开发文档 | [docs/modules/predict/AI预测核心模块-SpringBoot后端技术开发文档.md](docs/modules/predict/AI预测核心模块-SpringBoot后端技术开发文档.md) |
 | FastAPI 算法引擎开发文档 | [docs/modules/predict/AI预测核心模块-FastAPI算法引擎技术开发文档.md](docs/modules/predict/AI预测核心模块-FastAPI算法引擎技术开发文档.md) |
 | 批量处理技术设计文档（RabbitMQ） | [docs/modules/predict/批量处理技术设计文档.md](docs/modules/predict/批量处理技术设计文档.md) |
+| **设计工作台模块文档（8 份）** | [docs/modules/design/](docs/modules/design) |
+| 未修复功能清单（待办总入口） | [docs/development/未修复功能清单.md](docs/development/未修复功能清单.md) |
+| 问题总账与整改方案 | [docs/development/SynPharm问题总账与整改方案（整合版）.md](docs/development/SynPharm问题总账与整改方案（整合版）.md) |
+| 开发规范与工程指南 | [docs/development/开发规范与工程指南.md](docs/development/开发规范与工程指南.md) |
+| 第二阶段开发文档（多智能体） | [docs/development/第二阶段开发文档-多智能体协同与智能体闭环.md](docs/development/第二阶段开发文档-多智能体协同与智能体闭环.md) |
+| 更新日志 | [log/CHANGELOG.md](log/CHANGELOG.md) |
 
 ---
 
