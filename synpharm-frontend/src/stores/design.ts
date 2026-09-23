@@ -6,7 +6,7 @@
  * 工作台视图状态（页签/轮次/选中，可持久化到服务端以便"换设备接着干"）。
  */
 import { defineStore } from 'pinia'
-import { designApi } from '@/api/design'
+import { designApi, enrichWithEngine } from '@/api/design'
 import type {
   CandidateQuery,
   DesignCandidate,
@@ -54,7 +54,7 @@ export const useDesignStore = defineStore('design', {
     /** 工作台视图 */
     activeTab: 'canvas' as WorkbenchTab,
 
-    loading: { tree: false, candidates: false, metrics: false, initiating: false },
+    loading: { tree: false, candidates: false, metrics: false, initiating: false, engine: false },
     error: ''
   }),
 
@@ -122,7 +122,11 @@ export const useDesignStore = defineStore('design', {
     /** 当前轮次候选总数（来自轮次统计，与分页无关） */
     currentRoundCandidateCount(): number {
       return this.currentRound?.candidateCount ?? 0
-    }
+    },
+
+    /** 当前页已完成引擎校验的候选数（状态栏提示用） */
+    engineVerifiedCount: (state) =>
+      state.candidates.filter((c) => c.inchikeySource === 'ENGINE').length
   },
 
   actions: {
@@ -253,6 +257,38 @@ export const useDesignStore = defineStore('design', {
         })
       } catch {
         // 视图状态持久化失败不影响主流程
+      }
+    },
+
+    /**
+     * 引擎校验：把当前页候选的 InChIKey / 分子量 / 分子式换成化学引擎实算值。
+     *
+     * 调用时机：2D 编辑器子应用就绪后（见 Design.vue onEditorReady），也可由用户手动重跑。
+     * 全程可选 —— 引擎未就绪时直接返回 0，页面继续用估算值工作。
+     * 结果变化时整体刷新：分子量参与硬约束判定，得分/分级/轮次统计都可能变。
+     *
+     * @returns 实际发生变化的候选数
+     */
+    async enrichCurrentPage(): Promise<number> {
+      // 逐分子串行求值，重复触发只会排队；用同一个标志挡住重入
+      if (this.loading.engine) return 0
+
+      const smilesList = this.candidates.map((c) => c.smiles)
+      if (!smilesList.length) return 0
+
+      this.loading.engine = true
+      try {
+        const changed = await enrichWithEngine(smilesList)
+        if (changed > 0) {
+          this.tree = await designApi.fetchTree(this.projectId)
+          await this.loadCandidates()
+        }
+        return changed
+      } catch (err) {
+        this.error = err instanceof Error ? err.message : '引擎校验失败'
+        return 0
+      } finally {
+        this.loading.engine = false
       }
     },
 

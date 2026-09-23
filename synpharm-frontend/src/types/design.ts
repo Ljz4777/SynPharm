@@ -215,6 +215,20 @@ export interface DesignCandidate {
   compositeScore: number
   reviewStatus: ReviewStatus
   createdAt: string
+
+  /**
+   * 以下三项为「引擎校验」增强字段（均为可选，缺失时界面按估算值渲染）。
+   *
+   * 演示数据用轻量估算给出 InChIKey/分子量（列表可秒开），编辑器子应用就绪后
+   * 再由本地化学引擎（Indigo）回填真值。后端就绪后这三项由后端直接给出，
+   * 前端渲染逻辑无需改动。
+   */
+  /** 引擎实算分子量（Indigo）。回填后与 mw 同步 */
+  mwEngine?: number
+  /** 引擎实算分子式 */
+  formula?: string
+  /** InChIKey 来源：ENGINE=化学引擎实算；ESTIMATE=演示估算（非去重依据） */
+  inchikeySource?: 'ENGINE' | 'ESTIMATE'
 }
 
 /** 列表查询条件（对齐设计文档 06 的 /api/design/candidates/ranked） */
@@ -286,6 +300,20 @@ export interface EvaluationCapabilities {
   dti: boolean
   ddi: boolean
   ppi: boolean
+}
+
+/**
+ * 由编辑器子应用（Indigo）算出的分子事实。
+ *
+ * 注意：这是**前端编辑器自带的能力**，并非最终架构 —— 按设计文档，这类计算属于 FastAPI。
+ * 当前用途是让演示数据由化学引擎真算得出（真实 InChIKey 也是全平台去重键），
+ * 后端就绪后这些值应改由后端提供，本类型可原样复用。
+ */
+export interface EngineAnalysis {
+  smiles: string
+  inchikey: string
+  molecularWeight: number
+  formula: string
 }
 
 /* ------------------------------------------------------------------ */

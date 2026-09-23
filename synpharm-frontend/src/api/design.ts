@@ -9,12 +9,13 @@
  * 端点路径与 `docs/modules/design/` 各模块文档保持一致。
  */
 import { request } from '@/utils/request'
-import { mockDesignApi } from '@/api/design.mock'
+import { applyAnalysis as applyMockAnalysis, mockDesignApi } from '@/api/design.mock'
 import type {
   CandidateQuery,
   DesignCandidate,
   DesignCommand,
   DesignTree,
+  EngineAnalysis,
   EvaluationCapabilities,
   MetricDefinition,
   MoleculeMetrics,
@@ -100,3 +101,42 @@ const realDesignApi: DesignApi = {
 export const designApi: DesignApi = USE_MOCK ? mockDesignApi : realDesignApi
 
 export const isDesignMockEnabled = USE_MOCK
+
+/* ------------------------------------------------------------------ */
+/* 引擎校验：把「估算值」升级为「化学引擎真值」                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * 化学引擎分析器：由 `MoleculeEditor.vue` 在子应用（含 Indigo）就绪后注册。
+ * 输入一批 SMILES，返回 InChIKey / 分子量 / 分子式。
+ */
+export type MoleculeAnalyzer = (smilesList: string[]) => Promise<EngineAnalysis[]>
+
+let moleculeAnalyzer: MoleculeAnalyzer | null = null
+
+/** 注册/注销分析器（传 null 表示编辑器已卸载） */
+export function registerMoleculeAnalyzer(fn: MoleculeAnalyzer | null): void {
+  moleculeAnalyzer = fn
+}
+
+/** 化学引擎是否已就绪（界面据此决定是否给出「引擎校验」入口） */
+export const isMoleculeAnalyzerReady = (): boolean => moleculeAnalyzer !== null
+
+/**
+ * 用本地化学引擎把一批 SMILES 算成真值并回填数据层，返回实际回填的候选数。
+ *
+ * 为什么存在：演示数据为了列表秒开而用轻量估算，而 InChIKey 是全平台去重键，
+ * 只有引擎真值才站得住；分子量也是硬约束（200~500）的判据之一。
+ *
+ * 降级策略：引擎未就绪（子应用未构建/加载失败）或未使用 mock 时直接返回 0，
+ * 不报错、不阻塞 —— 页面继续用估算值工作。
+ * 引擎在运行中崩掉则向上抛错，由 store 展示给用户（不静默吞掉）。
+ *
+ * 未来归属：按设计文档，此类计算属于 FastAPI；后端就绪后本函数应退化为空实现。
+ */
+export async function enrichWithEngine(smilesList: string[]): Promise<number> {
+  if (!moleculeAnalyzer || smilesList.length === 0) return 0
+  if (!USE_MOCK) return 0
+  const items = await moleculeAnalyzer(smilesList)
+  return applyMockAnalysis(items)
+}

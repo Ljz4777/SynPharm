@@ -24,6 +24,7 @@ import type {
   DesignProject,
   DesignRound,
   DesignTree,
+  EngineAnalysis,
   EvaluationCapabilities,
   GenerationRun,
   MetricDefinition,
@@ -75,20 +76,26 @@ const latency = (seed: number): Promise<void> =>
 /* 1. 候选分子来源：脚手架 × 取代基（对应生成策略 S1）                  */
 /* ================================================================== */
 
-/** 脚手架：`[*]` 为取代基连接点，替换后即为完整结构 */
+/**
+ * 脚手架：只写「母核」本身，取代基在**尾部**拼接（SMILES 中 `A B` 表示 A–B 键，
+ * 所以写在后面的片段才是连接点那一端）。
+ *
+ * 注意：早期版本把 `[*]` 放在开头再 replace，会让每个片段被反向接入
+ * （`OC` 会拼成 `OCc1...`＝苄醇而不是甲氧基），故改为尾部拼接。
+ */
 const SCAFFOLDS = [
-  '[*]c1ccccc1', // 苯
-  '[*]c1ccc(F)cc1', // 4-氟苯
-  '[*]c1ccncc1', // 吡啶
-  '[*]c1ccc2ccccc2c1', // 萘
-  '[*]C1CCCCC1', // 环己烷
-  '[*]c1ccsc1', // 噻吩
-  '[*]c1ccc(-c2ccccc2)cc1', // 联苯（分子量 ~154）
-  '[*]c1ccc(cc1)C(=O)c1ccccc1', // 二苯甲酮（~182）
-  '[*]c1ccc(-c2ccc(-c3ccccc3)cc2)cc1' // 三联苯（~230）
+  'c1ccccc1', // 苯基（取代位与母核任一位等价）
+  'c1ccc(F)cc1', // 3-氟苯基（F 与取代基呈间位）
+  'c1ccncc1', // 3-吡啶基
+  'c1ccc2ccccc2c1', // 1-萘基
+  'C1CCCCC1', // 环己基
+  'c1ccsc1', // 2-噻吩基
+  'c1ccc(-c2ccccc2)cc1', // 联苯（分子量 ~154）
+  'c1ccc(cc1)C(=O)c1ccccc1', // 二苯甲酮（~182）
+  'c1ccc(-c2ccc(-c3ccccc3)cc2)cc1' // 三联苯（~230）
 ] as const
 
-/** 取代基：均为单开价基团，替换 `[*]` 后仍为合法 SMILES */
+/** 取代基：均为「可尾部拼接」的单开价片段；H 为空串，等价于母核本身 */
 const SUBSTITUENTS = [
   { code: 'H', label: '氢', smiles: '' },
   { code: 'Me', label: '甲基', smiles: 'C' },
@@ -127,7 +134,8 @@ function buildMoleculePool(): SeedMolecule[] {
   SUBSTITUENTS.forEach((substituent) => {
     SCAFFOLDS.forEach((scaffold, scaffolIndex) => {
       pool.push({
-        smiles: scaffold.replace('[*]', substituent.smiles),
+        // 尾部拼接：H 为空串，得到母核本身；其余片段末端原子即为连接原子
+        smiles: `${scaffold}${substituent.smiles}`,
         scaffolIndex,
         substituent
       })
@@ -941,6 +949,72 @@ function seedData(): void {
   })
 
   finalizeScores()
+}
+
+/* ---------------------- 引擎真值回填（可选增强） ---------------------- */
+
+/** 已回填的引擎结果：SMILES → 事实。用于判断是否需重算 */
+const engineAnalysis = new Map<string, EngineAnalysis>()
+
+/**
+ * 把化学引擎（编辑器子应用里的 Indigo）算出的真值回填到演示数据。
+ *
+ * 为什么需要：mock 为了列表秒开，用轻量估算给出 InChIKey / 分子量，
+ * 而 InChIKey 是全平台去重键、分子量是硬约束判据，二者都要求真值。
+ *
+ * 只覆盖引擎能给的三项（InChIKey / 分子量 / 分子式）：
+ * logP、QED、TPSA、SA 等 Indigo 不提供，仍保持估算（后端就绪后由后端计算）。
+ *
+ * 分子量参与硬约束判定，因此回填后必须重算得分、分级与轮次统计。
+ *
+ * @returns 实际发生变更的候选数
+ */
+export function applyAnalysis(items: EngineAnalysis[]): number {
+  if (!items.length) return 0
+  seedData()
+
+  let changed = 0
+
+  items.forEach((item) => {
+    if (!item?.smiles || !item.inchikey) return
+
+    const previous = engineAnalysis.get(item.smiles)
+    engineAnalysis.set(item.smiles, item)
+
+    // 同一结构重复校验且结果一致时跳过，避免无意义的全量重算
+    if (
+      previous &&
+      previous.inchikey === item.inchikey &&
+      previous.molecularWeight === item.molecularWeight
+    ) {
+      return
+    }
+
+    const candidate = allCandidates().find((c) => c.smiles === item.smiles)
+    if (!candidate) return
+
+    // 引擎真值替换估算分子量：候选冗余列与判定用的描述符必须同步更新
+    const mw = round(item.molecularWeight, 2)
+    candidate.mw = mw
+    candidate.mwEngine = mw
+    candidate.formula = item.formula
+    candidate.inchikeySource = 'ENGINE'
+
+    const derived = derivedCache.get(candidate.id)
+    if (derived) derived.descriptors.mw = mw
+
+    // InChIKey 变了要同步维护判重表，否则后续判重会漏
+    if (candidate.inchikey !== item.inchikey) {
+      byInchikey.delete(candidate.inchikey)
+      candidate.inchikey = item.inchikey
+      byInchikey.set(item.inchikey, candidate)
+    }
+
+    changed++
+  })
+
+  if (changed > 0) finalizeScores()
+  return changed
 }
 
 /* ================================================================== */

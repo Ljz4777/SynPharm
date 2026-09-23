@@ -108,6 +108,18 @@
               {{ saving ? '保存中…' : '保存为新候选' }}
             </button>
           </template>
+
+          <!-- 引擎校验：画布与候选页签都可用（候选列表正是看分子量的地方） -->
+          <button
+            v-if="store.activeTab === 'canvas' || store.activeTab === 'candidates'"
+            type="button"
+            class="ide__action"
+            :disabled="!editorReady || store.loading.engine || !store.candidates.length"
+            title="用本地 Indigo 引擎实算本页候选的 InChIKey、分子量与分子式"
+            @click="verifyWithEngine"
+          >
+            {{ store.loading.engine ? '校验中…' : '引擎校验' }}
+          </button>
         </div>
 
         <div class="ide__stage">
@@ -157,6 +169,9 @@
           <span class="ide__status-item">
             选中 <b>{{ store.selectedCandidate?.displayName ?? '—' }}</b>
           </span>
+          <span v-if="store.engineVerifiedCount" class="ide__status-item">
+            本页 {{ store.engineVerifiedCount }}/{{ store.candidates.length }} 已引擎校验
+          </span>
           <span class="ide__status-spacer" />
           <span v-if="store.degraded" class="ide__status-item ide__status-item--warn">
             ⚠ 部分计算引擎未启用，相关指标已跳过
@@ -167,6 +182,34 @@
 
       <!-- ==================== 右栏：约束与指标 ==================== -->
       <aside class="ide__right">
+        <!-- 选中分子摘要：让「估算 → 引擎实算」的差别可见 -->
+        <div v-if="store.selectedCandidate" class="ide__mol">
+          <div class="ide__mol-head">
+            <span class="ide__mol-name">{{ store.selectedCandidate.displayName ?? '未命名' }}</span>
+            <span
+              class="ide__mol-badge"
+              :class="engineVerified ? 'ide__mol-badge--engine' : ''"
+              :title="engineVerified ? 'InChIKey / 分子量由本地化学引擎实算' : '未做引擎校验，分子量为轻量估算值'"
+            >
+              {{ engineVerified ? '引擎实算' : '估算' }}
+            </span>
+          </div>
+          <div class="ide__mol-row">
+            <span>分子式</span>
+            <b>{{ store.selectedCandidate.formula ?? '—' }}</b>
+          </div>
+          <div class="ide__mol-row">
+            <span>分子量</span>
+            <b>{{ (store.selectedCandidate.mwEngine ?? store.selectedCandidate.mw).toFixed(2) }} Da</b>
+          </div>
+          <div class="ide__mol-row">
+            <span>InChIKey</span>
+            <b class="ide__mol-key" :title="store.selectedCandidate.inchikey">
+              {{ store.selectedCandidate.inchikey }}
+            </b>
+          </div>
+        </div>
+
         <div class="ide__pane-title">
           设计约束
           <span v-if="store.violations.length" class="ide__pane-badge">
@@ -215,6 +258,7 @@
         </div>
 
         <p class="ide__hint">
+          分子式与分子量在「引擎校验」后由本地 Indigo 引擎实算，其余指标仍为演示估算。
           数据经 <code>designApi</code> 获取；后端就绪后置
           <code>VITE_DESIGN_MOCK=false</code> 即切换到真实接口。
         </p>
@@ -267,14 +311,14 @@
  *   中栏 画布 / 候选 / 对比 / 口袋 —  store.candidates + 编辑器
  *   右栏 约束判定 + 指标      —  store.violations + store.metricRows
  */
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import Sidebar from '@/components/Sidebar.vue'
 import MoleculeEditor from '@/components/design/MoleculeEditor.vue'
 import CandidateGrid from '@/components/design/CandidateGrid.vue'
 import DiffView from '@/components/design/DiffView.vue'
 import PocketView from '@/components/design/PocketView.vue'
 import { useDesignStore } from '@/stores/design'
-import { isDesignMockEnabled } from '@/api/design'
+import { isDesignMockEnabled, registerMoleculeAnalyzer } from '@/api/design'
 import type { DesignProjectStatus, GenerationRunStatus, ProjectTargetRole, WorkbenchTab } from '@/types/design'
 
 const store = useDesignStore()
@@ -343,6 +387,9 @@ const dataSourceLabel = computed(() =>
   isDesignMockEnabled ? '数据来源：内置演示数据' : '数据来源：后端接口'
 )
 
+/** 选中分子的数据是否已由化学引擎实算（決定右上角角标显示「引擎实算」还是「估算」） */
+const engineVerified = computed(() => store.selectedCandidate?.inchikeySource === 'ENGINE')
+
 /** 指标展示格式：数值型按单位决定小数位，布尔/文本型直接展示文本 */
 function formatMetricValue(row: {
   definition: { metricCode: string; unit?: string; valueType: string }
@@ -373,10 +420,25 @@ function onEditorReady(): void {
   editorReady.value = true
   editorErrorText.value = ''
   loadSelectedToCanvas()
+
+  // 编辑器自带 Indigo：注册为本页的「化学引擎真值」来源（注册表在 api/design.ts）
+  registerMoleculeAnalyzer(async (smilesList) => {
+    const editor = editorRef.value
+    if (!editor) return []
+    return editor.analyzeBatch(smilesList)
+  })
+
+  // 就绪即把当前页的估算值刷新为引擎真值（逐分子串行，页面不阻塞）
+  void store.enrichCurrentPage()
 }
 
 function onEditorError(message: string): void {
   editorErrorText.value = message
+}
+
+/** 手动重跑引擎校验：编辑器重新加载后、或想刷新真值时使用 */
+function verifyWithEngine(): void {
+  void store.enrichCurrentPage()
 }
 
 function loadSelectedToCanvas(): void {
@@ -416,6 +478,11 @@ function renderStructure(smiles: string): Promise<string> {
 
 onMounted(() => {
   void store.init()
+})
+
+// 卸载时注销分析器，避免注册表持有已销毁组件的引用
+onBeforeUnmount(() => {
+  registerMoleculeAnalyzer(null)
 })
 </script>
 
@@ -845,6 +912,72 @@ onMounted(() => {
   color: $color-text-faint;
   text-align: center;
   line-height: 1.7;
+}
+
+/* 右栏：选中分子摘要（引擎真值来源可见） */
+.ide__mol {
+  margin: $spacing-sm $spacing-md 0;
+  padding: $spacing-sm $spacing-md;
+  border: 1px solid $color-border;
+  border-radius: $radius-control;
+  background: $color-surface-alt;
+}
+
+.ide__mol-head {
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+  margin-bottom: 6px;
+}
+
+.ide__mol-name {
+  flex: 1;
+  min-width: 0;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+  color: $color-text;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ide__mol-badge {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: $radius-pill;
+  background: $color-surface-sunken;
+  font-size: 11px;
+  color: $color-text-faint;
+}
+
+.ide__mol-badge--engine {
+  background: rgba(16, 185, 129, 0.14);
+  color: $success-color;
+}
+
+.ide__mol-row {
+  display: flex;
+  align-items: baseline;
+  gap: $spacing-sm;
+  font-size: 11px;
+  line-height: 1.9;
+  color: $color-text-faint;
+
+  b {
+    margin-left: auto;
+    min-width: 0;
+    font-weight: $font-weight-medium;
+    color: $color-text;
+  }
+}
+
+/* InChIKey 长达 27 字符，允许截断但保留完整值在 title 里 */
+.ide__mol-key {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
 }
 
 .ide__statusbar {

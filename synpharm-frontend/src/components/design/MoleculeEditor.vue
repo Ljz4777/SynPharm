@@ -32,6 +32,7 @@
  * 子应用未构建时（public/ketcher 不存在）会在此给出明确指引，而不是白屏。
  */
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
+import type { EngineAnalysis } from '@/types/design'
 
 /** 子应用入口；base 变化时自动跟随 */
 const frameSrc = `${import.meta.env.BASE_URL}ketcher/index.html`
@@ -47,6 +48,8 @@ const ENGINE_TIMEOUT_MS = 120000
 const REQUEST_TIMEOUT_MS = 15000
 /** 结构式渲染超时：首次调用需要拉起渲染服务（另一个 Indigo worker） */
 const RENDER_TIMEOUT_MS = 60000
+/** 批量分析超时：按分子逐个串行求值，数量多时耗时可观 */
+const ANALYZE_TIMEOUT_MS = 180000
 
 type Status = 'loading' | 'engine' | 'ready' | 'error'
 
@@ -236,6 +239,20 @@ defineExpose({
     if (raw.startsWith('data:')) return raw
     const mime = format === 'svg' ? 'image/svg+xml' : 'image/png'
     return `data:${mime};base64,${raw}`
+  },
+  /**
+   * 批量用 Indigo 计算真实 InChIKey / 分子量 / 分子式。
+   * 结构体载荷以 JSON 字符串往返（协议里 data 统一为字符串）。
+   */
+  analyzeBatch: async (smilesList: string[]): Promise<EngineAnalysis[]> => {
+    if (!smilesList.length) return []
+    const raw = await request({ type: 'analyzeBatch', smilesList }, ANALYZE_TIMEOUT_MS)
+    if (!raw) return []
+    try {
+      return JSON.parse(raw) as EngineAnalysis[]
+    } catch {
+      return []
+    }
   },
   setMolecule: (smiles: string): void => {
     post({ type: 'setMolecule', smiles })

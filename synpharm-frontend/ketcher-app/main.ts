@@ -13,7 +13,10 @@
  * 通信协议（与 src/components/design/MoleculeEditor.vue 成对维护）：
  *   父 → 子  setMolecule{smiles} | getSmiles{requestId} | getMolfile{requestId} | layout
  *            | renderImage{smiles, format, requestId}
+ *            | analyzeBatch{smilesList, requestId}
  *   子 → 父  mounted | ready | response{requestId,ok,data|error} | error{message}
+ *
+ * 说明：response 的 data 始终是字符串；结构体载荷（如分析结果数组）以 JSON 传递。
  */
 import { createElement } from 'react'
 import { createRoot } from 'react-dom/client'
@@ -34,6 +37,22 @@ interface KetcherApi {
     data: string,
     options?: { outputFormat: 'png' | 'svg'; backgroundColor?: string }
   ) => Promise<Blob>
+  /** 实例持有的 Indigo 服务，已登记 ketcherId，可直接对任意结构求值 */
+  structService: {
+    getInChIKey: (struct: string) => Promise<string>
+    calculate: (data: {
+      struct: string
+      properties: string[]
+    }) => Promise<Record<string, string | number | boolean>>
+  }
+}
+
+/** 单个分子的引擎计算结果 */
+interface AnalysisItem {
+  smiles: string
+  inchikey: string
+  molecularWeight: number
+  formula: string
 }
 
 type ParentMessage =
@@ -42,6 +61,7 @@ type ParentMessage =
   | { type: 'getMolfile'; requestId: string }
   | { type: 'layout' }
   | { type: 'renderImage'; smiles: string; format: 'png' | 'svg'; requestId: string }
+  | { type: 'analyzeBatch'; smilesList: string[]; requestId: string }
 
 /** 仅接受同源父窗口的消息，避免被第三方页面驱动 */
 const PARENT_ORIGIN = window.location.origin
@@ -105,17 +125,48 @@ function blobToDataUrl(blob: Blob): Promise<string> {
 }
 
 /**
- * 结构式渲染串行化。
- * 同一个 Ketcher 实例内部共用一个 Indigo 实例，并发调用 generateImage 会互相干扰
- * （实测并发两次时只有一次成功）。对比页签会同时渲染 A / B 两个结构式，
- * 因此在这里排队，调用方无需关心。
+ * 用 Indigo 计算单个分子的真实 InChIKey、分子量与分子式。
+ *
+ * 走 `ketcher.structService`：该服务由 Ketcher 实例创建并已登记 ketcherId，
+ * 因此可以直接对任意 SMILES 求值，不需要把结构塞进编辑器（那样会打断用户正在做的事）。
  */
-let renderChain: Promise<unknown> = Promise.resolve()
+async function analyzeOne(smiles: string): Promise<AnalysisItem | null> {
+  const service = ketcher?.structService
+  if (!service) return null
 
-function enqueueRender<T>(task: () => Promise<T>): Promise<T> {
-  const result = renderChain.then(task, task)
+  try {
+    const inchikey = await service.getInChIKey(smiles)
+    const calculated = await service.calculate({
+      struct: smiles,
+      properties: ['molecular-weight', 'gross']
+    })
+
+    const molecularWeight = Number(calculated['molecular-weight'])
+    if (!Number.isFinite(molecularWeight)) return null
+
+    return {
+      smiles,
+      inchikey,
+      molecularWeight,
+      formula: String(calculated['gross'] ?? '')
+    }
+  } catch {
+    // 单个分子解析失败（如 SMILES 不被 Indigo 接受）时跳过，不影响整批
+    return null
+  }
+}
+
+/**
+ * Indigo 调用统一串行化。
+ * 同一个 Ketcher 实例内部共用一个 Indigo 实例，并发调用会互相干扰
+ * （实测并发渲染两次只成功一次）。渲染与分析都走这里，调用方无需关心。
+ */
+let indigoChain: Promise<unknown> = Promise.resolve()
+
+function enqueueIndigo<T>(task: () => Promise<T>): Promise<T> {
+  const result = indigoChain.then(task, task)
   // 无论成功失败都让队列继续，避免一次失败卡死后续请求
-  renderChain = result.catch(() => undefined)
+  indigoChain = result.catch(() => undefined)
   return result
 }
 
@@ -157,8 +208,7 @@ window.addEventListener('message', (event: MessageEvent<ParentMessage>) => {
   void handleMessage(data)
 })
 
-async function handleMessage(data: ParentMessage): Promise<void> {
-  try {
+async function handleMessage(data: ParentMessage): Promise<void> {  try {
     switch (data.type) {
       case 'setMolecule':
         await ketcher?.setMolecule(data.smiles)
@@ -184,11 +234,28 @@ async function handleMessage(data: ParentMessage): Promise<void> {
         const instance = ketcher
         if (!instance) throw new Error('编辑器尚未就绪')
         // 用 Ketcher 实例自带的方法：它内部已登记好 ketcherId，无需另建服务
-        const dataUrl = await enqueueRender(async () => {
+        const dataUrl = await enqueueIndigo(async () => {
           const blob = await instance.generateImage(data.smiles, { outputFormat: data.format })
           return blobToDataUrl(blob)
         })
         toParent({ type: 'response', requestId: data.requestId, ok: true, data: dataUrl })
+        break
+      }
+
+      case 'analyzeBatch': {
+        if (!ketcher) throw new Error('编辑器尚未就绪')
+        const results: AnalysisItem[] = []
+        for (const smiles of data.smilesList) {
+          const item = await enqueueIndigo(() => analyzeOne(smiles))
+          // 单个分子失败不影响整批，跳过即可
+          if (item) results.push(item)
+        }
+        toParent({
+          type: 'response',
+          requestId: data.requestId,
+          ok: true,
+          data: JSON.stringify(results)
+        })
         break
       }
 
