@@ -55,6 +55,7 @@ const navItems: NavItem[] = [
   { path: '/tasks', label: '任务管理', icon: '📋', match: ['/tasks'] },
   { path: '/targets', label: '靶点库', icon: '🧪', match: ['/targets'] },
   { path: '/visualization', label: '3D可视化', icon: '🧫', match: ['/visualization'] },
+  { path: '/design', label: '设计工作台', icon: '🧬', match: ['/design'] },
   { path: '/profile', label: '个人中心', icon: '👤', match: ['/profile'] }
 ]
 
