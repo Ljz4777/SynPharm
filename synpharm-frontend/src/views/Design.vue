@@ -139,11 +139,9 @@
             <DiffView :render-structure="renderStructure" :initial-a="store.selectedMolId" />
           </div>
 
-          <!-- 口袋：待实现 -->
-          <div v-if="store.activeTab === 'pocket'" class="ide__placeholder">
-            <span class="ide__placeholder-icon">{{ activeTabMeta.icon }}</span>
-            <span class="ide__placeholder-title">{{ activeTabMeta.label }}</span>
-            <span class="ide__placeholder-desc">{{ activeTabMeta.desc }}</span>
+          <!-- 口袋 -->
+          <div v-if="store.activeTab === 'pocket'" class="ide__stage-slot">
+            <PocketView />
           </div>
         </div>
 
@@ -274,6 +272,7 @@ import Sidebar from '@/components/Sidebar.vue'
 import MoleculeEditor from '@/components/design/MoleculeEditor.vue'
 import CandidateGrid from '@/components/design/CandidateGrid.vue'
 import DiffView from '@/components/design/DiffView.vue'
+import PocketView from '@/components/design/PocketView.vue'
 import { useDesignStore } from '@/stores/design'
 import { isDesignMockEnabled } from '@/api/design'
 import type { DesignProjectStatus, GenerationRunStatus, ProjectTargetRole, WorkbenchTab } from '@/types/design'
@@ -291,15 +290,6 @@ const TABS: Array<{ key: WorkbenchTab; icon: string; label: string }> = [
   { key: 'diff', icon: '🔀', label: '对比' },
   { key: 'pocket', icon: '🧊', label: '口袋' }
 ]
-
-const activeTabMeta = computed(() => {
-  const found = TABS.find((t) => t.key === store.activeTab)
-  return {
-    icon: found?.icon ?? '',
-    label: found?.label ?? '',
-    desc: `${found?.label ?? ''}视图将在后续步骤实现（见 docs/modules/design/07-工作台与交互设计.md）`
-  }
-})
 
 /* ------------------------------- 文案映射 ------------------------------- */
 
