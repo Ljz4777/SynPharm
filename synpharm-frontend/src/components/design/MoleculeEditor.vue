@@ -45,6 +45,8 @@ const MOUNT_TIMEOUT_MS = 20000
 const ENGINE_TIMEOUT_MS = 120000
 /** 单次读写请求超时 */
 const REQUEST_TIMEOUT_MS = 15000
+/** 结构式渲染超时：首次调用需要拉起渲染服务（另一个 Indigo worker） */
+const RENDER_TIMEOUT_MS = 60000
 
 type Status = 'loading' | 'engine' | 'ready' | 'error'
 
@@ -169,7 +171,7 @@ function onMessage(event: MessageEvent<ChildMessage>): void {
   }
 }
 
-function request(kind: 'getSmiles' | 'getMolfile'): Promise<string> {
+function request(message: Record<string, unknown>, timeoutMs = REQUEST_TIMEOUT_MS): Promise<string> {
   if (status.value !== 'ready') {
     return Promise.reject(new Error('编辑器尚未就绪'))
   }
@@ -180,10 +182,10 @@ function request(kind: 'getSmiles' | 'getMolfile'): Promise<string> {
     const timer = window.setTimeout(() => {
       pending.delete(requestId)
       reject(new Error('编辑器响应超时'))
-    }, REQUEST_TIMEOUT_MS)
+    }, timeoutMs)
 
     pending.set(requestId, { resolve, reject, timer })
-    post({ type: kind, requestId })
+    post({ ...message, requestId })
   })
 }
 
@@ -221,8 +223,20 @@ function reload(): void {
 
 defineExpose({
   isReady: (): boolean => status.value === 'ready',
-  getSmiles: (): Promise<string> => request('getSmiles'),
-  getMolfile: (): Promise<string> => request('getMolfile'),
+  getSmiles: (): Promise<string> => request({ type: 'getSmiles' }),
+  getMolfile: (): Promise<string> => request({ type: 'getMolfile' }),
+  /**
+   * 把任意结构式渲染为图片（返回可直接用于 img.src 的 data URL）。
+   * 走的是 Indigo 的 render 能力，首次调用会拉起渲染服务，故超时给得宽松些。
+   */
+  renderImage: async (smiles: string, format: 'svg' | 'png' = 'svg'): Promise<string> => {
+    const raw = await request({ type: 'renderImage', smiles, format }, RENDER_TIMEOUT_MS)
+    if (!raw) return ''
+    // 子应用可能返回完整 data URL，也可能只返回 base64 载荷，两种都兼容
+    if (raw.startsWith('data:')) return raw
+    const mime = format === 'svg' ? 'image/svg+xml' : 'image/png'
+    return `data:${mime};base64,${raw}`
+  },
   setMolecule: (smiles: string): void => {
     post({ type: 'setMolecule', smiles })
   },

@@ -134,8 +134,13 @@
             />
           </div>
 
-          <!-- 对比 / 口袋：待实现 -->
-          <div v-if="store.activeTab !== 'canvas' && store.activeTab !== 'candidates'" class="ide__placeholder">
+          <!-- 对比 -->
+          <div v-if="store.activeTab === 'diff'" class="ide__stage-slot">
+            <DiffView :render-structure="renderStructure" :initial-a="store.selectedMolId" />
+          </div>
+
+          <!-- 口袋：待实现 -->
+          <div v-if="store.activeTab === 'pocket'" class="ide__placeholder">
             <span class="ide__placeholder-icon">{{ activeTabMeta.icon }}</span>
             <span class="ide__placeholder-title">{{ activeTabMeta.label }}</span>
             <span class="ide__placeholder-desc">{{ activeTabMeta.desc }}</span>
@@ -268,6 +273,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import Sidebar from '@/components/Sidebar.vue'
 import MoleculeEditor from '@/components/design/MoleculeEditor.vue'
 import CandidateGrid from '@/components/design/CandidateGrid.vue'
+import DiffView from '@/components/design/DiffView.vue'
 import { useDesignStore } from '@/stores/design'
 import { isDesignMockEnabled } from '@/api/design'
 import type { DesignProjectStatus, GenerationRunStatus, ProjectTargetRole, WorkbenchTab } from '@/types/design'
@@ -407,6 +413,15 @@ async function saveAsCandidate(): Promise<void> {
   } finally {
     saving.value = false
   }
+}
+
+/**
+ * 供对比页签复用编辑器的渲染能力（子应用经 Indigo render 生成图片）。
+ * 渲染服务与编辑器在同一个 iframe 内，不需要再加载一份化学引擎。
+ */
+function renderStructure(smiles: string): Promise<string> {
+  if (!editorRef.value) return Promise.resolve('')
+  return editorRef.value.renderImage(smiles)
 }
 
 onMounted(() => {

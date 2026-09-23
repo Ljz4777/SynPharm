@@ -12,6 +12,7 @@
  *
  * 通信协议（与 src/components/design/MoleculeEditor.vue 成对维护）：
  *   父 → 子  setMolecule{smiles} | getSmiles{requestId} | getMolfile{requestId} | layout
+ *            | renderImage{smiles, format, requestId}
  *   子 → 父  mounted | ready | response{requestId,ok,data|error} | error{message}
  */
 import { createElement } from 'react'
@@ -28,6 +29,11 @@ interface KetcherApi {
   getMolfile: () => Promise<string>
   setMolecule: (structure: string) => Promise<void>
   layout: () => Promise<void>
+  /** 把任意结构式渲染为图片（Ketcher 的公开 API，走 Indigo render） */
+  generateImage: (
+    data: string,
+    options?: { outputFormat: 'png' | 'svg'; backgroundColor?: string }
+  ) => Promise<Blob>
 }
 
 type ParentMessage =
@@ -35,6 +41,7 @@ type ParentMessage =
   | { type: 'getSmiles'; requestId: string }
   | { type: 'getMolfile'; requestId: string }
   | { type: 'layout' }
+  | { type: 'renderImage'; smiles: string; format: 'png' | 'svg'; requestId: string }
 
 /** 仅接受同源父窗口的消息，避免被第三方页面驱动 */
 const PARENT_ORIGIN = window.location.origin
@@ -82,6 +89,35 @@ window.setTimeout(() => {
 
 /** 单例即可：内部持有 Indigo worker，重复构造会重复拉取引擎 */
 const structServiceProvider = new StandaloneStructServiceProvider()
+
+/**
+ * Blob → data URL。
+ * Ketcher 的 generateImage 返回 Blob，而跨 iframe 传 Blob 不如传字符串方便，
+ * 这里直接转成 data URL，父页面可以拿去当中 <img> 的 src。
+ */
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result ?? ''))
+    reader.onerror = () => reject(new Error('结构式图片读取失败'))
+    reader.readAsDataURL(blob)
+  })
+}
+
+/**
+ * 结构式渲染串行化。
+ * 同一个 Ketcher 实例内部共用一个 Indigo 实例，并发调用 generateImage 会互相干扰
+ * （实测并发两次时只有一次成功）。对比页签会同时渲染 A / B 两个结构式，
+ * 因此在这里排队，调用方无需关心。
+ */
+let renderChain: Promise<unknown> = Promise.resolve()
+
+function enqueueRender<T>(task: () => Promise<T>): Promise<T> {
+  const result = renderChain.then(task, task)
+  // 无论成功失败都让队列继续，避免一次失败卡死后续请求
+  renderChain = result.catch(() => undefined)
+  return result
+}
 
 const host = document.getElementById('root')
 
@@ -143,6 +179,18 @@ async function handleMessage(data: ParentMessage): Promise<void> {
       case 'layout':
         await ketcher?.layout()
         break
+
+      case 'renderImage': {
+        const instance = ketcher
+        if (!instance) throw new Error('编辑器尚未就绪')
+        // 用 Ketcher 实例自带的方法：它内部已登记好 ketcherId，无需另建服务
+        const dataUrl = await enqueueRender(async () => {
+          const blob = await instance.generateImage(data.smiles, { outputFormat: data.format })
+          return blobToDataUrl(blob)
+        })
+        toParent({ type: 'response', requestId: data.requestId, ok: true, data: dataUrl })
+        break
+      }
 
       default:
         break
