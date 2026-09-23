@@ -60,11 +60,29 @@
           </button>
 
           <div class="ide__tabs-spacer" />
-          <span class="ide__tabs-note">界面骨架 · 画布与数据待接入</span>
+
+          <button
+            type="button"
+            class="ide__action"
+            :disabled="!editorReady"
+            title="载入一个示例分子，验证编辑器可用"
+            @click="loadSample"
+          >
+            加载示例分子
+          </button>
+          <button type="button" class="ide__action" :disabled="!editorReady" @click="readSmiles">
+            读取 SMILES
+          </button>
         </div>
 
         <div class="ide__stage">
-          <div class="ide__placeholder">
+          <!-- 画布：2D 分子编辑器（Ketcher 跑在独立子应用里，经 iframe 嵌入） -->
+          <div v-show="activeTab === 'canvas'" class="ide__stage-slot">
+            <MoleculeEditor ref="editorRef" @ready="onEditorReady" @error="onEditorError" />
+          </div>
+
+          <!-- 其余页签：占位，待后续实现 -->
+          <div v-if="activeTab !== 'canvas'" class="ide__placeholder">
             <span class="ide__placeholder-icon">{{ activeTabMeta.icon }}</span>
             <span class="ide__placeholder-title">{{ activeTabMeta.label }}</span>
             <span class="ide__placeholder-desc">{{ activeTabMeta.desc }}</span>
@@ -73,11 +91,15 @@
 
         <div class="ide__statusbar">
           <span class="ide__status-item">
-            <span class="ide__status-dot ide__status-dot--idle" />
-            界面骨架已就绪 · 计算与数据待接入
+            <span
+              class="ide__status-dot"
+              :class="editorReady ? 'ide__status-dot--ok' : 'ide__status-dot--idle'"
+            />
+            {{ editorStateText }}
           </span>
+          <span class="ide__status-item">SMILES：{{ currentSmiles || '—' }}</span>
           <span class="ide__status-spacer" />
-          <span class="ide__status-item ide__status-item--muted">2D 编辑器选型待定</span>
+          <span class="ide__status-item ide__status-item--muted">Ketcher · 独立子应用内计算</span>
         </div>
       </main>
 
@@ -128,14 +150,31 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import Sidebar from '@/components/Sidebar.vue'
+import MoleculeEditor from '@/components/design/MoleculeEditor.vue'
 
 /* ------------------------------------------------------------------
- * 说明：本页为干实验设计工作台（IDE）的骨架。
- * 当前仅实现「外壳」：路由、导航入口、三栏布局、底部时间线与页签切换。
- * 中栏画布与各栏数据接入见后续步骤；页面内展示数据均为占位。
+ * 说明：本页为干实验设计工作台（IDE）。
+ * 已完成：路由与导航入口、三栏布局、底部时间线、页签切换，
+ *         以及中栏 2D 分子编辑器（Ketcher 独立子应用 + iframe）。
+ * 待接入：左栏项目树、右栏约束与指标、候选/对比/口袋三个页签。
+ * 页面内展示数据均为占位，接口就绪后替换，不影响布局。
  * ------------------------------------------------------------------ */
 
+/** 示例分子：EGFR 抑制剂骨架（厄洛替尼类似物，用于验证编辑器可用） */
+const SAMPLE_SMILES = 'COCCOc1cc2ncnc(Nc3ccc(F)c(Cl)c3)c2cc1OCCO'
+
 const projectName = ref('未命名设计项目')
+
+const editorRef = ref<InstanceType<typeof MoleculeEditor> | null>(null)
+const editorReady = ref(false)
+const editorErrorText = ref('')
+const currentSmiles = ref('')
+
+const editorStateText = computed(() => {
+  if (editorReady.value) return '编辑器就绪'
+  if (editorErrorText.value) return '编辑器不可用'
+  return '编辑器加载中…'
+})
 
 const activeNode = ref('target')
 const activeTab = ref<'canvas' | 'candidates' | 'diff' | 'pocket'>('canvas')
@@ -182,6 +221,27 @@ const metrics = [
   { code: 'QED', label: 'QED', value: '—' },
   { code: 'SA_SCORE', label: '合成可及性', value: '—' }
 ]
+
+function onEditorReady(): void {
+  editorReady.value = true
+  editorErrorText.value = ''
+}
+
+function onEditorError(message: string): void {
+  editorErrorText.value = message
+}
+
+function loadSample(): void {
+  editorRef.value?.setMolecule(SAMPLE_SMILES)
+}
+
+async function readSmiles(): Promise<void> {
+  try {
+    currentSmiles.value = (await editorRef.value?.getSmiles()) ?? ''
+  } catch (err) {
+    currentSmiles.value = err instanceof Error ? err.message : '读取失败'
+  }
+}
 </script>
 
 <style lang="scss" scoped>
@@ -413,9 +473,29 @@ const metrics = [
   flex: 1;
 }
 
-.ide__tabs-note {
-  font-size: 11px;
-  color: $color-text-faint;
+.ide__action {
+  padding: 5px $spacing-sm;
+  border: 1px solid $color-border;
+  border-radius: $radius-control;
+  background: $color-surface;
+  font-size: $font-size-xs;
+  color: $color-text-soft;
+  cursor: pointer;
+  transition: all $transition-fast;
+
+  &:hover:not(:disabled) {
+    border-color: $color-brand;
+    color: $color-brand-strong;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  & + & {
+    margin-left: $spacing-sm;
+  }
 }
 
 .ide__stage {
@@ -423,6 +503,11 @@ const metrics = [
   flex: 1;
   min-height: 0;
   background: $color-canvas;
+}
+
+.ide__stage-slot {
+  position: absolute;
+  inset: 0;
 }
 
 .ide__placeholder {

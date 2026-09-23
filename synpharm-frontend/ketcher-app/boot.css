@@ -1,0 +1,36 @@
+/* 编辑器子应用的启动态样式。
+   刻意外链而非内联：Vite 在 root 为子目录时会因内联 <style> 触发
+   html-inline-proxy 报错（No matching HTML proxy module found）。 */
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    sans-serif;
+  background: #ffffff;
+}
+
+#boot {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: #ffffff;
+  color: #64748b;
+  font-size: 13px;
+  z-index: 10;
+}
+
+#boot .boot__icon {
+  font-size: 26px;
+}
