@@ -5,6 +5,10 @@ dist-ssr/
 .vite/
 *.tsbuildinfo
 
+# 分子编辑器子应用（Ketcher）的产物由镜像内 npm run build:ketcher 生成，
+# 这里排除本地残留，避免陈旧文件静默混入镜像
+public/ketcher/
+
 # ===== 敏感配置 =====
 .env
 .env.local
