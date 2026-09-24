@@ -67,7 +67,7 @@
           <div class="pv__section-title">显示模式</div>
           <div class="pv__modes">
             <button
-              v-for="mode in DISPLAY_MODES"
+              v-for="mode in VIEWER_DISPLAY_MODES"
               :key="mode.value"
               type="button"
               class="pv__mode"
@@ -84,7 +84,7 @@
           <div class="pv__section-title">颜色方案</div>
           <div class="pv__colors">
             <button
-              v-for="color in COLOR_SCHEMES"
+              v-for="color in VIEWER_COLOR_SCHEMES"
               :key="color.value"
               type="button"
               class="pv__color"
@@ -170,70 +170,46 @@
  * 颜色方案（链/元素/二级结构/单色）、网格、自动旋转、标签、重置视角、导出图片。
  *
  * 实现要点：
- *   - 复用既有 `MolstarViewer` 且**不修改它** —— 它已在 3D 可视化页稳定使用，
- *     为其新增能力有回归风险；本组件通过它已暴露的方法驱动这些能力
+ *   - 3D 显示控制接口（显示模式 / 颜色方案 / Mol* 映射 / 组件句柄）来自共享模块
+ *     `components/protein/viewerControls.ts`，与预测域的 3D 可视化页是**同一份**，
+ *     不再两边各写一份
+ *   - 复用既有 `MolstarViewer`，只以**可选 prop** 扩展出口袋腔体与共结晶配体，
+ *     不传即不生效 —— 因此既有 3D 可视化页零影响
  *   - 用 defineAsyncComponent 按需加载，避免 molstar（约 2 MB）进入 design 分块
  *   - 结构切换后 Mol* 会重建场景，需要把当前 UI 状态重新同步一次
  */
 import { computed, defineAsyncComponent, nextTick, ref } from 'vue'
 import { useDesignStore } from '@/stores/design'
 import type { ProjectTargetRole } from '@/types/design'
+import {
+  VIEWER_COLOR_SCHEMES,
+  VIEWER_DISPLAY_MODES,
+  useMolstarControls,
+  type MolstarHandle
+} from '@/components/protein/viewerControls'
 
 const store = useDesignStore()
 
 /** 只在此页签需要时才加载 molstar */
 const MolstarViewer = defineAsyncComponent(() => import('@/components/protein/MolstarViewer.vue'))
 
-/**
- * MolstarViewer 通过 defineExpose 暴露的方法子集。
- * 这里显式声明而非用 InstanceType —— 异步组件拿不到组件类型，
- * 且只依赖这几个方法可以让耦合面更清楚。
- */
-interface MolstarHandle {
-  resetView: () => void
-  exportImage: () => Promise<void> | void
-  updateRepresentation: (type: string) => void
-  setColorScheme: (scheme: string) => void
-  setGridVisible: (visible: boolean) => void
-  setLabelsVisible: (visible: boolean) => void
-}
-
 const molstarRef = ref<MolstarHandle | null>(null)
 
 /* ------------------------------ 显示选项 ------------------------------ */
 
-type DisplayMode = 'cartoon' | 'sphere' | 'stick' | 'surface'
-type ColorScheme = 'chain' | 'element' | 'secondary' | 'uniform'
+/**
+ * 显示模式 / 颜色方案 / Mol* 映射 / 组件句柄全部来自共享模块 `viewerControls.ts`，
+ * 与预测域的 3D 可视化页用的是**同一份接口**（此前两边各写一份，改一处必漏另一处）。
+ */
+const {
+  displayMode,
+  colorScheme,
+  changeDisplayMode,
+  changeColorScheme,
+  resyncAfterLoad
+} = useMolstarControls(molstarRef)
+
 type SettingKey = 'showGrid' | 'autoRotate' | 'showLabels' | 'showPocket' | 'showLigand'
-
-/** 与 MolstarViewer 内部的表示类型对应（取值与既有 3D 可视化页保持一致） */
-const MOLSTAR_REP_TYPES: Record<DisplayMode, string> = {
-  cartoon: 'cartoon',
-  sphere: 'spacefill',
-  stick: 'ball-and-stick',
-  surface: 'molecular-surface'
-}
-
-const MOLSTAR_COLOR_TYPES: Record<ColorScheme, string> = {
-  chain: 'chain-id',
-  element: 'element-symbol',
-  secondary: 'secondary-structure',
-  uniform: 'uniform'
-}
-
-const DISPLAY_MODES: Array<{ value: DisplayMode; label: string }> = [
-  { value: 'cartoon', label: '卡通' },
-  { value: 'sphere', label: '球体' },
-  { value: 'stick', label: '棍状' },
-  { value: 'surface', label: '表面' }
-]
-
-const COLOR_SCHEMES: Array<{ value: ColorScheme; label: string; preview: string }> = [
-  { value: 'chain', label: '链颜色', preview: 'linear-gradient(to right, #1a1a2e, #0f3460)' },
-  { value: 'element', label: '元素', preview: 'linear-gradient(to right, #4CAF50, #FF9800, #2196F3)' },
-  { value: 'secondary', label: '二级结构', preview: 'linear-gradient(to right, #E91E63, #2196F3)' },
-  { value: 'uniform', label: '单色', preview: '#1a1a2e' }
-]
 
 const SETTINGS: Array<{ key: SettingKey; label: string }> = [
   { key: 'showPocket', label: '口袋腔体' },
@@ -243,8 +219,6 @@ const SETTINGS: Array<{ key: SettingKey; label: string }> = [
   { key: 'showLabels', label: '显示标签' }
 ]
 
-const displayMode = ref<DisplayMode>('cartoon')
-const colorScheme = ref<ColorScheme>('chain')
 const showGrid = ref(false)
 const autoRotate = ref(false)
 const showLabels = ref(false)
@@ -312,15 +286,7 @@ const druggabilityTone = computed(() => {
 
 /* ------------------------------ 交互 ------------------------------ */
 
-function changeDisplayMode(mode: DisplayMode): void {
-  displayMode.value = mode
-  nextTick(() => molstarRef.value?.updateRepresentation(MOLSTAR_REP_TYPES[mode]))
-}
-
-function changeColorScheme(scheme: ColorScheme): void {
-  colorScheme.value = scheme
-  nextTick(() => molstarRef.value?.setColorScheme(MOLSTAR_COLOR_TYPES[scheme]))
-}
+/* 显示模式与颜色方案的切换由 useMolstarControls 提供，此处不再各写一份 */
 
 function toggleSetting(key: SettingKey, value: boolean): void {
   if (key === 'showGrid') {
@@ -362,19 +328,10 @@ async function handleExport(): Promise<void> {
 function onStructureLoaded(): void {
   structureLoaded.value = true
 
-  nextTick(() => {
-    if (displayMode.value !== 'cartoon') {
-      molstarRef.value?.updateRepresentation(MOLSTAR_REP_TYPES[displayMode.value])
-    }
-    if (colorScheme.value !== 'chain') {
-      molstarRef.value?.setColorScheme(MOLSTAR_COLOR_TYPES[colorScheme.value])
-    }
-    if (showGrid.value) {
-      molstarRef.value?.setGridVisible(true)
-    }
-    if (showLabels.value) {
-      molstarRef.value?.setLabelsVisible(true)
-    }
+  // 模式与配色的重新同步在共享逻辑里；网格与标签是本页独有的补充项
+  resyncAfterLoad(() => {
+    if (showGrid.value) molstarRef.value?.setGridVisible(true)
+    if (showLabels.value) molstarRef.value?.setLabelsVisible(true)
   })
 }
 

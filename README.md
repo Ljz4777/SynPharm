@@ -32,7 +32,7 @@
 - 🔬 **三大预测类型** — 支持 DTI / PPI / DDI，单条实时预测 + 批量 CSV 预测
 - 📨 **RabbitMQ 异步批处理** — 消息持久化、死信队列、幂等消费、任务状态以 DB 为权威
 - 🔐 **多策略用户认证** — 邮箱验证码 / 密码 / 游客登录，JWT 无状态认证、登录限流、Token 黑名单
-- 🧬 **3D 可视化** — 交互式分子结构展示（卡通 / 球体 / 棍状 / 表面）
+- 🧬 **3D 可视化** — 交互式分子结构展示（卡通 / 球体 / 棍状 / 表面），由预测结果页深链进入
 - ⚗️ **干实验设计工作台** — 三栏 IDE（画布 / 候选 / 对比 / 口袋），2D 分子编辑器 + 3D 口袋腔体与配体 + 候选分子引擎实算
 - 🎯 **靶点库** — 按靶点类型 / 蛋白家族 / 主要通路 / 疾病领域精细分类
 - 🚀 **Docker Compose 一键部署** — MySQL / Redis / RabbitMQ / 后端 / FastAPI / 前端 6 服务
@@ -137,7 +137,8 @@ SynPharm/
 │       ├── components/            # 公共组件（Sidebar/ResultCard/protein/design）
 │       ├── router/ stores/        # 路由 / 状态管理（含 design store）
 │       ├── types/ utils/          # 类型 / 工具（含 design 契约）
-│       └── views/                 # 页面（Home/Login/Dashboard/Predict/Results/Tasks/Targets/Visualization/Design/Profile）
+│       └── views/                 # 页面（Design 设计工作台在导航首位；
+│                                  #   Visualization 已从导航移除，仅作预测结果的深链落地页）
 │
 ├── deploy/                        # 部署
 │   ├── docker-compose.yml         # 6 服务编排（mysql/redis/rabbitmq/backend/fastapi/frontend）

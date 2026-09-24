@@ -48,14 +48,20 @@ interface NavItem {
   match: string[]
 }
 
+/**
+ * 主导航项，数组顺序即展示顺序。
+ *
+ * ⚠️ `/visualization`（3D 可视化）**刻意不在这里** —— 它的能力已并入设计工作台的口袋页签。
+ * 该页面本身仍然存在：预测结果页 / 任务详情等会带着预测上下文（亲和力、置信度、相互作用）
+ * 深链进来，那部分属于预测域数据，工作台的口袋页签替代不了，所以只从导航移除、不删页面。
+ */
 const navItems: NavItem[] = [
+  { path: '/design', label: '设计工作台', icon: '🧬', match: ['/design'] },
   { path: '/dashboard', label: '仪表盘', icon: '📊', match: ['/dashboard'] },
   { path: '/predict', label: '预测中心', icon: '🎯', match: ['/predict'] },
   { path: '/results', label: '预测结果', icon: '📈', match: ['/results', '/result'] },
   { path: '/tasks', label: '任务管理', icon: '📋', match: ['/tasks'] },
   { path: '/targets', label: '靶点库', icon: '🧪', match: ['/targets'] },
-  { path: '/visualization', label: '3D可视化', icon: '🧫', match: ['/visualization'] },
-  { path: '/design', label: '设计工作台', icon: '🧬', match: ['/design'] },
   { path: '/profile', label: '个人中心', icon: '👤', match: ['/profile'] }
 ]
 
