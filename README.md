@@ -402,6 +402,7 @@ npm run build
 
 | 文档 | 路径 |
 | :--- | :--- |
+| **项目书（竞赛 / 申报用）** | [docs/SynPharm项目书.md](docs/SynPharm项目书.md) |
 | API 接口文档 | [docs/api/接口文档.md](docs/api/接口文档.md) |
 | 部署指南 | [docs/deploy/部署指南.md](docs/deploy/部署指南.md) |
 | 容器化部署与 Docker 环境指南 | [docs/deploy/容器化部署与Docker环境指南.md](docs/deploy/容器化部署与Docker环境指南.md) |
