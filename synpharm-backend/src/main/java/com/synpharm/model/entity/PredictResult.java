@@ -25,6 +25,9 @@ public class PredictResult {
     /** 结果编号（唯一） */
     private String resultNo;
 
+    /** 预测指纹 sha256(userId|algoType|归一化输入)，唯一索引兜底幂等（C-07） */
+    private String fingerprint;
+
     /** 任务ID */
     private Long taskId;
 

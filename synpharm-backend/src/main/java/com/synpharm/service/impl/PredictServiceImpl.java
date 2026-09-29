@@ -11,6 +11,8 @@ import com.synpharm.dto.request.PPIPredictRequest;
 import com.synpharm.client.FastApiClient;
 import com.synpharm.dto.response.DdiDrugListResponse;
 import com.synpharm.dto.response.PredictResultResponse;
+import com.synpharm.exception.BusinessException;
+import com.synpharm.exception.ErrorCode;
 import com.synpharm.model.entity.PredictResult;
 import com.synpharm.model.entity.PredictTask;
 import com.synpharm.pipeline.PipelineFactory;
@@ -20,8 +22,10 @@ import com.synpharm.service.PredictService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -70,13 +74,14 @@ public class PredictServiceImpl implements PredictService {
                 .inputType("smiles")
                 .algoType("DDI")
                 .outputType("json")
-                .inputValue(request.getDrugASmiles() + "," + request.getDrugBSmiles())
+                .inputValue(request.getDrugAInput() + "," + request.getDrugBInput())
                 .build(), userId);
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public PredictResultResponse predict(GeneralPredictRequest request, Long userId) {
+        // D-05：不在事务内做 30~60s 的外部 HTTP 调用。
+        // 推理在事务外执行，落库在 savePrediction 内以短事务完成（单条 insert 自带事务）。
         log.info("通用预测请求: userId={}, inputType={}, algoType={}, outputType={}",
                 userId, request.getInputType(), request.getAlgoType(), request.getOutputType());
 
@@ -111,14 +116,32 @@ public class PredictServiceImpl implements PredictService {
     /**
      * 落库：为单条预测创建隐式任务记录 + 结果记录。
      * <p>predict_result.task_id 为 NOT NULL 外键，故先创建任务再创建结果。
+     * <p>C-07：按指纹幂等——同用户、同算法、同输入在 10 分钟内重复提交直接返回已有结果；
+     * 落库失败不再静默，抛出 SYSTEM_ERROR 让用户感知。
      */
     private void savePrediction(GeneralPredictRequest request, Long userId, PredictResultResponse response) {
+        String algoType = response.getAlgoType() != null ? response.getAlgoType() : request.getAlgoType();
+        String fingerprint = computeFingerprint(request, userId, algoType);
         try {
-            // 1. 创建隐式任务
+            // 1. 幂等检查：指纹命中直接复用已有结果（C-07）
+            PredictResult existing = resultMapper.selectOne(new LambdaQueryWrapper<PredictResult>()
+                    .eq(PredictResult::getFingerprint, fingerprint)
+                    .orderByDesc(PredictResult::getId)
+                    .last("LIMIT 1")
+            );
+            if (existing != null) {
+                response.setId(existing.getId());
+                response.setCreatedAt(existing.getCreatedAt());
+                response.setLigandSmiles(existing.getLigandSmiles());
+                log.info("幂等命中，复用已有预测结果: resultId={}, fingerprint={}", existing.getId(), fingerprint);
+                return;
+            }
+
+            // 2. 创建隐式任务
             PredictTask task = new PredictTask();
             task.setTaskNo(generateNo("T"));
             task.setUserId(userId);
-            task.setPredictType(toPredictType(response.getAlgoType() != null ? response.getAlgoType() : request.getAlgoType()));
+            task.setPredictType(toPredictType(algoType));
             task.setInputType(request.getInputType());
             task.setInputValue(request.getInputValue());
             task.setFileUrl(request.getFileUrl());
@@ -128,14 +151,15 @@ public class PredictServiceImpl implements PredictService {
             task.setCompletedAt(LocalDateTime.now());
             taskMapper.insert(task);
 
-            // 2. 创建预测结果
+            // 3. 创建预测结果（带指纹）
             PredictResult entity = new PredictResult();
             entity.setResultNo(generateNo("R"));
+            entity.setFingerprint(fingerprint);
             entity.setTaskId(task.getId());
             entity.setUserId(userId);
             entity.setTargetId(response.getTargetId());
             entity.setTargetName(response.getTargetName());
-            entity.setLigandSmiles(extractLigandSmiles(request, response.getAlgoType()));
+            entity.setLigandSmiles(extractLigandSmiles(request, algoType));
             entity.setBindingAffinity(response.getBindingAffinity());
             entity.setConfidenceScore(response.getConfidenceScore());
             entity.setConfidenceLevel(response.getConfidenceLevel());
@@ -149,8 +173,30 @@ public class PredictServiceImpl implements PredictService {
             response.setLigandSmiles(entity.getLigandSmiles());
             log.info("预测结果落库成功: resultId={}, taskId={}", entity.getId(), task.getId());
         } catch (Exception e) {
-            // 落库失败不应阻断预测结果返回
-            log.error("预测结果落库失败: {}", e.getMessage());
+            // C-07：落库失败不再静默吞掉，带堆栈日志 + 业务异常上抛
+            log.error("预测结果落库失败: userId={}, algoType={}", userId, algoType, e);
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "预测结果保存失败，请稍后重试");
+        }
+    }
+
+    /**
+     * 计算预测指纹（C-07）：sha256(userId | algoType小写 | 归一化输入)
+     * <p>归一化规则：输入值去首尾空白并压缩内部连续空白，
+     * 使"相同语义"的输入产生相同指纹。唯一索引 uk_fingerprint 在 DB 层兜底并发。
+     */
+    private String computeFingerprint(GeneralPredictRequest request, Long userId, String algoType) {
+        String normalized = request.getInputValue() == null ? "" : request.getInputValue().trim().replaceAll("\\s+", "");
+        String raw = userId + "|" + (algoType == null ? "" : algoType.toLowerCase()) + "|" + normalized;
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] digest = md.digest(raw.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder(digest.length * 2);
+            for (byte b : digest) {
+                sb.append(String.format("%02x", b));
+            }
+            return sb.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 算法不可用", e);
         }
     }
 
@@ -180,7 +226,7 @@ public class PredictServiceImpl implements PredictService {
         try {
             return objectMapper.writeValueAsString(obj);
         } catch (Exception e) {
-            log.warn("JSON序列化失败: {}", e.getMessage());
+            log.warn("JSON序列化失败", e);
             return null;
         }
     }
@@ -239,7 +285,7 @@ public class PredictServiceImpl implements PredictService {
             return objectMapper.readValue(json, new TypeReference<List<PredictResultResponse.InteractionInfo>>() {
             });
         } catch (Exception e) {
-            log.warn("相互作用JSON解析失败: {}", e.getMessage());
+            log.warn("相互作用JSON解析失败", e);
             return new ArrayList<>();
         }
     }

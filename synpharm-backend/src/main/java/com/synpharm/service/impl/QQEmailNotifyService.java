@@ -1,5 +1,7 @@
 package com.synpharm.service.impl;
 
+import com.synpharm.exception.BusinessException;
+import com.synpharm.exception.ErrorCode;
 import com.synpharm.service.NotifyService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -61,9 +63,10 @@ public class QQEmailNotifyService implements NotifyService {
             mailSender.send(message);
             log.info("邮件发送成功, to: {}, template: {}", target, templateCode);
         } catch (Exception e) {
-            // 邮件发送失败不应该影响主流程，只记录错误日志
-            log.error("邮件发送失败, to: {}, template: {}, error: {}",
-                    target, templateCode, e.getMessage());
+            // B-18：发送失败不再静默吞掉——记录完整堆栈并抛异常，
+            // 让调用方（验证码服务）知道邮件没发出去，避免用户空等验证码
+            log.error("邮件发送失败, to: {}, template: {}", target, templateCode, e);
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "邮件发送失败，请稍后重试");
         }
     }
 

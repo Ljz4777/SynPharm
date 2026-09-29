@@ -6,7 +6,7 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://localhost:3306/synpharm?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
     username: root
-    password: Fth419516.
+    password: ${DB_PASSWORD:}
 
   data:
     redis:
@@ -21,8 +21,8 @@ spring:
   mail:
     host: smtp.qq.com
     port: 465
-    username: ${QQ_EMAIL:3086499874@qq.com}
-    password: ${QQ_EMAIL_AUTH_CODE:cphjbrgtndkwdhde}
+    username: ${QQ_EMAIL:}
+    password: ${QQ_EMAIL_AUTH_CODE:}
     properties:
       mail:
         smtp:
@@ -46,8 +46,8 @@ mybatis-plus:
       logic-not-delete-value: 0
 
 jwt:
-  # 开发环境固定密钥（仅本地开发使用，生产环境必须通过 JWT_SECRET 环境变量注入）
-  secret: SynPharm-Dev-Secret-Key-2026-Do-Not-Use-In-Production-Env-1234567890
+  # 本地开发默认密钥（仅用于本机调试；部署环境必须通过 JWT_SECRET 环境变量注入强随机密钥）
+  secret: ${JWT_SECRET:SynPharm-Dev-Secret-Key-2026-Do-Not-Use-In-Production-Env-1234567890}
   expiration: 86400000
 
 server:
@@ -66,3 +66,7 @@ logging:
 # 应用配置
 app:
   name: SynPharm
+  doc:
+    open: true
+  cors:
+    allowed-origins: http://localhost:5173,http://127.0.0.1:5173

@@ -48,4 +48,5 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
   CMD curl -fsS http://localhost:8080/actuator/health || exit 1
 
-ENTRYPOINT ["java", "-jar", "app.jar"]
+# F-06：显式 JVM 内存参数（容器内存的 75% 上限 + G1GC），避免 OOM 被直接杀死
+ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75.0", "-XX:+UseG1GC", "-Dfile.encoding=UTF-8", "-jar", "app.jar"]

@@ -5,8 +5,7 @@
 
 USE synpharm;
 
-DROP TABLE IF EXISTS predict_result;
-CREATE TABLE predict_result (
+CREATE TABLE IF NOT EXISTS predict_result (
     id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '结果ID',
     result_no VARCHAR(32) NOT NULL UNIQUE COMMENT '结果编号',
     task_id BIGINT NOT NULL COMMENT '任务ID',

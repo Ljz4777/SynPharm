@@ -1,5 +1,6 @@
 package com.synpharm.config;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.cors.CorsConfiguration;
@@ -10,8 +11,10 @@ import org.springframework.web.filter.CorsFilter;
 /**
  * 跨域配置
  *
- * <p>配置Spring Boot应用的跨域资源共享(CORS)策略，
- * 允许前端应用跨域访问后端API。
+ * <p>配置Spring Boot应用的跨域资源共享(CORS)策略。
+ * B-07 修复：来源从配置读取（app.cors.allowed-origins，逗号分隔），
+ * 不再使用 "*" + allowCredentials（该组合本身就是浏览器禁止的无效配置）。
+ * 生产环境经 nginx 同源反代，可将配置留空以完全关闭 CORS。
  *
  * <p>提供两个Bean：
  * <ul>
@@ -20,10 +23,14 @@ import org.springframework.web.filter.CorsFilter;
  * </ul>
  *
  * @author SynPharm Team
- * @version 2.0.0
+ * @version 3.0.0
  */
 @Configuration
 public class CorsConfig {
+
+    /** 允许的来源列表（逗号分隔），为空时关闭 CORS */
+    @Value("${app.cors.allowed-origins:}")
+    private String allowedOrigins;
 
     /**
      * 配置CORS规则
@@ -33,8 +40,13 @@ public class CorsConfig {
     private CorsConfiguration buildCorsConfig() {
         CorsConfiguration config = new CorsConfiguration();
 
-        // 允许所有源（生产环境应限制具体域名）
-        config.addAllowedOriginPattern("*");
+        // B-07：白名单来源（不再允许任意源）
+        for (String origin : allowedOrigins.split(",")) {
+            String trimmed = origin.trim();
+            if (!trimmed.isEmpty()) {
+                config.addAllowedOriginPattern(trimmed);
+            }
+        }
 
         // 允许所有请求头
         config.addAllowedHeader("*");

@@ -2,6 +2,7 @@ package com.synpharm.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.synpharm.dto.request.LoginRequest;
 import com.synpharm.dto.response.LoginLogResponse;
 import com.synpharm.dto.response.UserResponse;
 import com.synpharm.exception.BusinessException;
@@ -194,6 +195,11 @@ public class UserServiceImpl implements UserService {
         Long userId = getUserIdFromToken(token);
         SysUser user = getUserById(userId);
 
+        // B-17：新密码强度校验（与注册/重置密码同一套规则）
+        if (newPassword == null || !Pattern.matches(LoginRequest.PASSWORD_REGEX, newPassword)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "密码至少8位，必须包含大小写字母和数字");
+        }
+
         // 验证码登录的用户可能没有设置密码，此时 oldPassword 可为空
         if (user.getPassword() != null && !user.getPassword().isEmpty()) {
             if (!passwordEncoder.matches(oldPassword, user.getPassword())) {
@@ -202,6 +208,8 @@ public class UserServiceImpl implements UserService {
         }
 
         user.setPassword(passwordEncoder.encode(newPassword));
+        // B-04：改密后 token 版本 +1，所有旧 token 立即失效
+        user.setTokenVersion(user.getTokenVersion() == null ? 1 : user.getTokenVersion() + 1);
         userMapper.updateById(user);
         log.info("修改密码成功: userId={}", userId);
     }

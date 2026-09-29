@@ -6,8 +6,7 @@
 
 USE synpharm;
 
-DROP TABLE IF EXISTS sys_user;
-CREATE TABLE sys_user (
+CREATE TABLE IF NOT EXISTS sys_user (
     id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '用户ID',
     email VARCHAR(100) DEFAULT NULL COMMENT '用户邮箱（QQ邮箱登录用）',
     phone VARCHAR(20) DEFAULT NULL COMMENT '手机号（手机号登录用，预留）',

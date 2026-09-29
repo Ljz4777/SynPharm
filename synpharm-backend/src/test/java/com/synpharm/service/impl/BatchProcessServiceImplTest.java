@@ -5,6 +5,7 @@ import com.synpharm.client.FastApiClient;
 import com.synpharm.dto.response.BatchItemPageResponse;
 import com.synpharm.dto.response.BatchPredictionResponse;
 import com.synpharm.exception.BusinessException;
+import com.synpharm.exception.ErrorCode;
 import com.synpharm.exception.PredictionErrorCode;
 import com.synpharm.exception.PredictionException;
 import com.synpharm.model.entity.BatchTask;
@@ -146,8 +147,8 @@ class BatchProcessServiceImplTest {
 
         service.processBatch("b1", "DTI");
 
-        // 批次成功，统计正确（1 成功 1 失败）
-        assertEquals(2, task.getStatus());
+        // A-06：部分行失败，批次状态为 PARTIAL(4)，统计正确（1 成功 1 失败）
+        assertEquals(4, task.getStatus());
         assertEquals(1, task.getSuccessCount());
         assertEquals(1, task.getFailCount());
 
@@ -186,7 +187,8 @@ class BatchProcessServiceImplTest {
 
         service.processBatch("b1", "DTI");
 
-        assertEquals(2, task.getStatus());
+        // A-06：解析失败导致部分行失败，批次状态为 PARTIAL(4)
+        assertEquals(4, task.getStatus());
         assertEquals(2, item1.getStatus());
         assertEquals(3, item2.getStatus());
         assertEquals("INVALID_SMILES", item2.getErrorCode());
@@ -286,5 +288,72 @@ class BatchProcessServiceImplTest {
         // 按状态过滤
         service.getBatchItems("b1", 1L, 1, 10, 2);
         verify(batchTaskItemMapper, times(2)).selectList(any());
+    }
+
+    @Test
+    void 全失败批次_状态置FAIL_A06() {
+        when(batchTaskMapper.selectByBatchId("b1")).thenReturn(task);
+        BatchTaskItem item1 = item(1L, 1, "CCO," + VALID_SEQUENCE);
+        when(batchTaskItemMapper.selectList(any())).thenReturn(List.of(item1));
+        when(inputResolver.resolve(anyString(), anyString(), anyString())).thenReturn(dtiInput());
+
+        BatchPredictionResponse batchResponse = new BatchPredictionResponse();
+        batchResponse.setStatus("error");
+        batchResponse.setResults(List.of(Map.of("error", "模型推理失败")));
+        when(fastApiClient.predictBatch(anyList(), eq("DTI"))).thenReturn(batchResponse);
+        // 收尾统计：成功 0、失败 1
+        when(batchTaskItemMapper.selectCount(any())).thenReturn(0L, 1L);
+
+        service.processBatch("b1", "DTI");
+
+        // A-06：全失败批次不再误报 SUCCESS
+        assertEquals(3, task.getStatus());
+        assertEquals(0, task.getSuccessCount());
+        assertEquals(1, task.getFailCount());
+    }
+
+    @Test
+    void 查询批次状态_他人批次被拒绝_failClosed() {
+        BatchTask other = new BatchTask();
+        other.setBatchId("b1");
+        other.setUserId(2L);
+        when(batchTaskMapper.selectByBatchId("b1")).thenReturn(other);
+
+        BusinessException e = assertThrows(BusinessException.class,
+                () -> service.getBatchStatus("b1", 1L));
+        assertEquals(ErrorCode.FORBIDDEN, e.getErrorCode());
+    }
+
+    @Test
+    void 查询批次状态_userId为空被拒绝_failClosed() {
+        when(batchTaskMapper.selectByBatchId("b1")).thenReturn(task);
+
+        BusinessException e = assertThrows(BusinessException.class,
+                () -> service.getBatchStatus("b1", null));
+        assertEquals(ErrorCode.FORBIDDEN, e.getErrorCode());
+    }
+
+    @Test
+    void 查询明细_他人批次被拒绝_failClosed() {
+        BatchTask other = new BatchTask();
+        other.setBatchId("b1");
+        other.setUserId(2L);
+        when(batchTaskMapper.selectByBatchId("b1")).thenReturn(other);
+
+        BusinessException e = assertThrows(BusinessException.class,
+                () -> service.getBatchItems("b1", 1L, 1, 10, null));
+        assertEquals(ErrorCode.FORBIDDEN, e.getErrorCode());
+    }
+
+    @Test
+    void 下载结果_他人批次被拒绝_failClosed() {
+        BatchTask other = new BatchTask();
+        other.setBatchId("b1");
+        other.setUserId(2L);
+        when(batchTaskMapper.selectByBatchId("b1")).thenReturn(other);
+
+        BusinessException e = assertThrows(BusinessException.class,
+                () -> service.downloadBatch("b1", 1L));
+        assertEquals(ErrorCode.FORBIDDEN, e.getErrorCode());
     }
 }

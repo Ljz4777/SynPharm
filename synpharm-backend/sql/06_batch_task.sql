@@ -5,8 +5,7 @@
 
 USE synpharm;
 
-DROP TABLE IF EXISTS batch_task;
-CREATE TABLE batch_task (
+CREATE TABLE IF NOT EXISTS batch_task (
     id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
     batch_id VARCHAR(64) NOT NULL COMMENT '唯一批次ID (UUID)',
     user_id BIGINT NOT NULL COMMENT '关联用户ID',

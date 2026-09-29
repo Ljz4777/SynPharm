@@ -45,7 +45,12 @@ public class AuthServiceImpl implements AuthService {
     private static final String LOGIN_LOCK_KEY = "login:lock:";
     private static final String TOKEN_BLACKLIST_KEY = "token:blacklist:";
 
+    /** IP 维度失败计数与锁定（B-08：防止仅按账号锁定被恶意触发） */
+    private static final String IP_FAIL_KEY = "login:fail:ip:";
+    private static final String IP_LOCK_KEY = "login:lock:ip:";
+
     private static final int MAX_LOGIN_FAIL_COUNT = 5;
+    private static final int MAX_IP_FAIL_COUNT = 20;
     private static final int LOCK_DURATION_MINUTES = 15;
 
     @Override
@@ -56,6 +61,7 @@ public class AuthServiceImpl implements AuthService {
 
         try {
             checkLoginLock(account);
+            checkIpLock(ip);
 
             LoginResponse response = loginStrategyFactory.login(
                     request.getLoginType(),
@@ -115,7 +121,7 @@ public class AuthServiceImpl implements AuthService {
         log.info("注册成功, userId: {}, email: {}", user.getId(), email);
 
         // ========== 第四步：生成Token并自动登录 ==========
-        String token = jwtUtils.generateToken(user.getId(), user.getEmail(), user.getRole());
+        String token = jwtUtils.generateToken(user.getId(), user.getEmail(), user.getRole(), user.getTokenVersion());
         String ip = IpUtils.getClientIp(httpRequest);
         userMapper.updateLoginInfo(user.getId(), LocalDateTime.now(), ip, LocalDateTime.now());
 
@@ -149,6 +155,8 @@ public class AuthServiceImpl implements AuthService {
 
         user.setPassword(passwordEncoder.encode(newPassword));
         user.setUpdatedAt(LocalDateTime.now());
+        // B-04：密码重置后 token 版本 +1，所有旧 token 立即失效
+        user.setTokenVersion(user.getTokenVersion() == null ? 1 : user.getTokenVersion() + 1);
         userMapper.updateById(user);
 
         log.info("忘记密码-密码重置成功, email: {}", email);
@@ -175,7 +183,9 @@ public class AuthServiceImpl implements AuthService {
                 log.info("Token已加入黑名单, jti: {}", jti);
             }
         } catch (Exception e) {
-            log.warn("Token加入黑名单失败: {}", e.getMessage());
+            // B-05：黑名单写入失败不再假装成功，抛错让用户知道登出未完成
+            log.error("Token加入黑名单失败, jti 写入异常", e);
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "退出登录失败，请稍后重试");
         }
     }
 
@@ -216,6 +226,9 @@ public class AuthServiceImpl implements AuthService {
 
     private void handleLoginFail(String account, String ip, String userAgent,
                                  String loginType, String reason, String captchaType) {
+        // B-08：IP 维度失败计数对所有登录类型生效（含 guest），防止单 IP 暴力扫描
+        countIpFail(ip);
+
         if ("guest".equals(account)) {
             return;
         }
@@ -237,6 +250,48 @@ public class AuthServiceImpl implements AuthService {
         }
 
         saveLoginLog(null, account, loginType, ip, userAgent, 0, reason, captchaType);
+    }
+
+    /**
+     * IP 维度登录失败计数与锁定（B-08）
+     *
+     * <p>与账号维度并行：同一 IP 短时间内失败过多（如扫描他人邮箱触发锁定）
+     * 时整体限流，防止攻击者用别人的账号名触发锁定影响正常用户。
+     */
+    private void countIpFail(String ip) {
+        if (ip == null || ip.isBlank()) {
+            return;
+        }
+        String failKey = IP_FAIL_KEY + ip;
+        Long failCount = redisTemplate.opsForValue().increment(failKey);
+        if (failCount != null && failCount == 1) {
+            redisTemplate.expire(failKey, LOCK_DURATION_MINUTES, TimeUnit.MINUTES);
+        }
+        if (failCount != null && failCount >= MAX_IP_FAIL_COUNT) {
+            redisTemplate.opsForValue().set(
+                    IP_LOCK_KEY + ip,
+                    "1",
+                    LOCK_DURATION_MINUTES,
+                    TimeUnit.MINUTES
+            );
+            log.warn("IP 登录失败次数过多，已锁定, ip: {}, count: {}", ip, failCount);
+        }
+    }
+
+    /**
+     * 检查 IP 是否已被登录失败锁定（B-08）
+     */
+    private void checkIpLock(String ip) {
+        if (ip == null || ip.isBlank()) {
+            return;
+        }
+        Boolean locked = redisTemplate.hasKey(IP_LOCK_KEY + ip);
+        if (Boolean.TRUE.equals(locked)) {
+            Long expire = redisTemplate.getExpire(IP_LOCK_KEY + ip, TimeUnit.MINUTES);
+            log.warn("IP已被登录失败锁定, ip: {}, 剩余{}分钟", ip, expire);
+            throw new BusinessException(ErrorCode.UNAUTHORIZED,
+                    "登录尝试过于频繁，请" + (expire == null ? "稍后" : expire + "分钟后") + "再试");
+        }
     }
 
     private void clearLoginFailCount(String account) {
@@ -262,7 +317,7 @@ public class AuthServiceImpl implements AuthService {
             logEntity.setFailReason(failReason);
             loginLogMapper.insert(logEntity);
         } catch (Exception e) {
-            log.error("记录登录日志失败: {}", e.getMessage());
+            log.error("记录登录日志失败", e);
         }
     }
 }

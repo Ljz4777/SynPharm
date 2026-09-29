@@ -50,7 +50,7 @@ public class FavoriteServiceImpl implements FavoriteService {
         if (result == null) {
             throw new BusinessException(ErrorCode.RESULT_NOT_FOUND);
         }
-        if (userId != null && !userId.equals(result.getUserId())) {
+        if (userId == null || !userId.equals(result.getUserId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "只能收藏自己的预测结果");
         }
 
@@ -80,8 +80,8 @@ public class FavoriteServiceImpl implements FavoriteService {
         if (favorite == null) {
             throw new BusinessException("收藏不存在");
         }
-        // 归属校验：只能删除自己的收藏
-        if (userId != null && !userId.equals(favorite.getUserId())) {
+        // 归属校验：只能删除自己的收藏（fail-closed：userId 为空一律拒绝）
+        if (userId == null || !userId.equals(favorite.getUserId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "无权操作该收藏");
         }
         // 物理删除：唯一键 uk_user_result 存在，逻辑删除会导致重复收藏撞键

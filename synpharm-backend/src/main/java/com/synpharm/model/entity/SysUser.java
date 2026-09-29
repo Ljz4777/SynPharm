@@ -43,6 +43,9 @@ public class SysUser {
     /** 用户状态（0禁用，1启用） */
     private Integer status;
 
+    /** JWT 版本号（改密/重置后 +1，旧 token 立即失效） */
+    private Integer tokenVersion;
+
     /** 邮箱验证状态（0未验证，1已验证） */
     private Integer emailVerified;
 

@@ -28,20 +28,23 @@ public class MyBatisPlusMetaObjectHandler implements MetaObjectHandler {
     public void insertFill(MetaObject metaObject) {
         // 自动填充创建时间
         this.strictInsertFill(metaObject, "createdAt", LocalDateTime.class, LocalDateTime.now());
+        this.strictInsertFill(metaObject, "createTime", LocalDateTime.class, LocalDateTime.now());
         // 自动填充更新时间
         this.strictInsertFill(metaObject, "updatedAt", LocalDateTime.class, LocalDateTime.now());
+        this.strictInsertFill(metaObject, "updateTime", LocalDateTime.class, LocalDateTime.now());
     }
 
     /**
      * 更新操作时自动填充
-     * 
+     *
      * <p>在执行UPDATE语句时，自动更新updatedAt字段为当前时间。
-     * 
+     *
      * @param metaObject 元对象
      */
     @Override
     public void updateFill(MetaObject metaObject) {
         // 自动填充更新时间
         this.strictUpdateFill(metaObject, "updatedAt", LocalDateTime.class, LocalDateTime.now());
+        this.strictUpdateFill(metaObject, "updateTime", LocalDateTime.class, LocalDateTime.now());
     }
 }

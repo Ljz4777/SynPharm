@@ -75,13 +75,15 @@ public class JwtUtils {
      *
      * <p>Token中包含 jti（JWT ID）声明，用于唯一标识每个Token，
      * 可用于黑名单机制，比使用完整Token作为Key更节省Redis内存。
+     * ver 声明携带用户 token 版本号：改密/重置后版本 +1，旧 token 立即失效。
      *
-     * @param userId 用户ID
-     * @param email  用户邮箱
-     * @param role   用户角色
+     * @param userId       用户ID
+     * @param email        用户邮箱
+     * @param role         用户角色
+     * @param tokenVersion 用户 token 版本号（null 按 0 处理）
      * @return JWT令牌
      */
-    public String generateToken(Long userId, String email, String role) {
+    public String generateToken(Long userId, String email, String role, Integer tokenVersion) {
         Date now = new Date();
         Date expireDate = new Date(now.getTime() + expiration);
         String jti = UUID.randomUUID().toString();
@@ -91,6 +93,7 @@ public class JwtUtils {
                 .subject(String.valueOf(userId))
                 .claim("email", email)
                 .claim("role", role)
+                .claim("ver", tokenVersion != null ? tokenVersion : 0)
                 .issuedAt(now)
                 .expiration(expireDate)
                 .signWith(getSigningKey())
@@ -128,7 +131,7 @@ public class JwtUtils {
             log.warn("Token已过期");
             throw new BusinessException(ErrorCode.TOKEN_EXPIRED);
         } catch (UnsupportedJwtException | MalformedJwtException e) {
-            log.warn("Token格式错误: {}", e.getMessage());
+            log.warn("Token格式错误", e);
             throw new BusinessException(ErrorCode.TOKEN_INVALID);
         } catch (SignatureException e) {
             log.warn("Token签名验证失败");
@@ -137,7 +140,7 @@ public class JwtUtils {
             log.warn("Token参数为空");
             throw new BusinessException(ErrorCode.TOKEN_INVALID);
         } catch (JwtException e) {
-            log.warn("Token验证失败: {}", e.getMessage());
+            log.warn("Token验证失败", e);
             throw new BusinessException(ErrorCode.TOKEN_INVALID);
         }
     }
@@ -176,6 +179,20 @@ public class JwtUtils {
     }
 
     /**
+     * 从令牌中获取 token 版本号（ver 声明）
+     *
+     * <p>用于过滤器中与数据库当前版本比对，实现"改密后旧 token 立即失效"。
+     *
+     * @param token JWT令牌
+     * @return token 版本号，声明缺失时返回 0
+     */
+    public Integer getTokenVersionFromToken(String token) {
+        Claims claims = parseClaims(token);
+        Integer ver = claims.get("ver", Integer.class);
+        return ver != null ? ver : 0;
+    }
+
+    /**
      * 从令牌中获取 jti（JWT ID）
      *
      * <p>jti 是每个Token的唯一标识，用于黑名单机制。
@@ -188,7 +205,7 @@ public class JwtUtils {
             Claims claims = parseClaims(token);
             return claims.getId();
         } catch (Exception e) {
-            log.warn("获取Token jti失败: {}", e.getMessage());
+            log.warn("获取Token jti失败", e);
             return null;
         }
     }
@@ -206,7 +223,7 @@ public class JwtUtils {
             Date expirationDate = claims.getExpiration();
             return Math.max(0, expirationDate.getTime() - System.currentTimeMillis());
         } catch (Exception e) {
-            log.warn("获取Token剩余时间失败: {}", e.getMessage());
+            log.warn("获取Token剩余时间失败", e);
             return 0;
         }
     }

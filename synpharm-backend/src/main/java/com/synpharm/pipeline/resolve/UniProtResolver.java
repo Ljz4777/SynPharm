@@ -140,7 +140,7 @@ public class UniProtResolver {
         try {
             return redisTemplate.opsForValue().get(key);
         } catch (Exception e) {
-            log.warn("Redis 读取失败，降级直连外部 API: key={}, error={}", key, e.getMessage());
+            log.error("Redis 读取失败，降级直连外部 API: key={}", key, e);
             return null;
         }
     }
@@ -150,7 +150,7 @@ public class UniProtResolver {
         try {
             redisTemplate.opsForValue().set(key, value, ttl);
         } catch (Exception e) {
-            log.warn("Redis 写入失败，跳过缓存: key={}, error={}", key, e.getMessage());
+            log.error("Redis 写入失败，跳过缓存: key={}", key, e);
         }
     }
 }
