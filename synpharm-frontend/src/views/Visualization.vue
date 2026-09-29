@@ -455,6 +455,13 @@ import MolstarViewer from '@/components/protein/MolstarViewer.vue'
 
 import StatusTag from '@/components/ui/StatusTag.vue'
 
+import {
+  VIEWER_COLOR_SCHEMES,
+  VIEWER_DISPLAY_MODES,
+  useMolstarControls,
+  type MolstarHandle,
+} from '@/components/protein/viewerControls'
+
 
 /* =========================================================
  * Route
@@ -462,8 +469,21 @@ import StatusTag from '@/components/ui/StatusTag.vue'
 
 const route = useRoute()
 
+/**
+ * 显示控制接口与工作台口袋页签**共用一份实现**
+ * （`components/protein/viewerControls.ts`）：
+ * 显示模式 / 颜色方案 / Mol* 映射 / 组件句柄 / 加载后重新同步。
+ */
 const molstarRef =
-  ref<InstanceType<typeof MolstarViewer> | null>(null)
+  ref<MolstarHandle | null>(null)
+
+const {
+  displayMode,
+  colorScheme,
+  changeDisplayMode,
+  changeColorScheme,
+  resyncAfterLoad,
+} = useMolstarControls(molstarRef)
 
 
 /* =========================================================
@@ -795,15 +815,9 @@ const interactionCount = computed(() => {
  * UI State
  * ========================================================= */
 
-const displayMode =
-  ref('cartoon')
-
 /** 右侧显示控制栏是否展开；默认收起，把宽度让给 3D 画布 */
 const controlsOpen =
   ref(false)
-
-const colorScheme =
-  ref('chain')
 
 const showGrid =
   ref(false)
@@ -816,107 +830,13 @@ const showLabels =
 
 
 /* =========================================================
- * Display Modes
+ * Display Modes / Colors / Mol* Mapping
+ *
+ * 均由共享模块提供，与工作台口袋页签是同一份，避免两边漂移。
  * ========================================================= */
 
-const displayModes = [
-
-  {
-    value: 'cartoon',
-    label: '卡通',
-  },
-
-  {
-    value: 'sphere',
-    label: '球体',
-  },
-
-  {
-    value: 'stick',
-    label: '棍状',
-  },
-
-  {
-    value: 'surface',
-    label: '表面',
-  },
-
-]
-
-
-/* =========================================================
- * Colors
- * ========================================================= */
-
-const colorSchemes = [
-
-  {
-    value: 'chain',
-    label: '链颜色',
-    preview:
-      'linear-gradient(to right, #1a1a2e, #0f3460)',
-  },
-
-  {
-    value: 'element',
-    label: '元素',
-    preview:
-      'linear-gradient(to right, #4CAF50, #FF9800, #2196F3)',
-  },
-
-  {
-    value: 'secondary',
-    label: '二级结构',
-    preview:
-      'linear-gradient(to right, #E91E63, #2196F3)',
-  },
-
-  {
-    value: 'uniform',
-    label: '单色',
-    preview:
-      '#1a1a2e',
-  },
-
-]
-
-
-/* =========================================================
- * Mol* Mapping
- * ========================================================= */
-
-const MOLSTAR_REP_TYPES: Record<string, string> = {
-
-  cartoon:
-    'cartoon',
-
-  sphere:
-    'spacefill',
-
-  stick:
-    'ball-and-stick',
-
-  surface:
-    'molecular-surface',
-
-}
-
-
-const MOLSTAR_COLOR_TYPES: Record<string, string> = {
-
-  chain:
-    'chain-id',
-
-  element:
-    'element-symbol',
-
-  secondary:
-    'secondary-structure',
-
-  uniform:
-    'uniform',
-
-}
+const displayModes = VIEWER_DISPLAY_MODES
+const colorSchemes = VIEWER_COLOR_SCHEMES
 
 
 /* =========================================================
@@ -930,39 +850,12 @@ function onStructureLoaded(): void {
   )
 
   /*
-   * Mol* 加载完成后，
-   * 将当前 UI 状态重新同步一次。
+   * Mol* 加载完成后会重建场景并回到默认显示，
+   * 因此要把当前 UI 状态重新同步一次。
+   * 模式与配色在共享逻辑里；标签是本页的补充项。
    */
 
-  nextTick(() => {
-
-    if (displayMode.value !== 'cartoon') {
-
-      const type =
-        MOLSTAR_REP_TYPES[
-          displayMode.value
-        ]
-
-      if (type) {
-
-        molstarRef.value
-          ?.updateRepresentation(type)
-      }
-    }
-
-    if (colorScheme.value !== 'chain') {
-
-      const color =
-        MOLSTAR_COLOR_TYPES[
-          colorScheme.value
-        ]
-
-      if (color) {
-
-        molstarRef.value
-          ?.setColorScheme(color)
-      }
-    }
+  resyncAfterLoad(() => {
 
     if (showLabels.value) {
 
@@ -974,66 +867,6 @@ function onStructureLoaded(): void {
 
 }
 
-
-/* =========================================================
- * Display Mode
- * ========================================================= */
-
-function changeDisplayMode(
-  mode: string
-): void {
-
-  displayMode.value =
-    mode
-
-  const type =
-    MOLSTAR_REP_TYPES[mode]
-
-  if (!type) {
-    return
-  }
-
-  nextTick(() => {
-
-    molstarRef.value
-      ?.updateRepresentation(type)
-
-  })
-
-}
-
-
-/* =========================================================
- * Color
- * ========================================================= */
-
-function changeColorScheme(
-  scheme: string
-): void {
-
-  colorScheme.value =
-    scheme
-
-  const color =
-    MOLSTAR_COLOR_TYPES[scheme]
-
-  if (!color) {
-    return
-  }
-
-  nextTick(() => {
-
-    molstarRef.value
-      ?.setColorScheme(color)
-
-  })
-
-}
-
-
-/* =========================================================
- * Grid
- * ========================================================= */
 
 /* =========================================================
  * Labels

@@ -5,6 +5,9 @@ node_modules/
 dist/
 dist-serve/
 
+# 分子编辑器子应用构建产物（由 npm run build:ketcher 生成，约 30 MB）
+public/ketcher/
+
 # IDE
 .vscode/
 .idea/

@@ -25,7 +25,12 @@ ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 ARG VITE_ENABLE_MOCK=false
 ENV VITE_ENABLE_MOCK=$VITE_ENABLE_MOCK
 
-# 直接使用 vite 构建（vue-tsc 类型检查在 CI 阶段执行，避免容器内 OOM 与拖慢构建）
+# 先构建 2D 分子编辑器子应用（Ketcher + Indigo 化学引擎）→ public/ketcher
+# 该产物在 .gitignore 内（约 29 MB），因此**必须在镜像内构建**：
+# 若依赖开发者本地残留的 public/ketcher，CI 或新克隆的机器上编辑器会直接打不开。
+RUN npm run build:ketcher
+
+# 再构建主应用（vue-tsc 类型检查在 CI 阶段执行，避免容器内 OOM 与拖慢构建）
 RUN npx vite build
 
 # ---------- 阶段二：运行 ----------
