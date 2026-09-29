@@ -1,14 +1,12 @@
 spring:
   application:
     name: synpharm-backend
-  profiles:
-    active: dev
 
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: ${DB_URL:jdbc:mysql://localhost:3306/synpharm?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai}
     username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:password}
+    password: ${DB_PASSWORD:}
 
   data:
     redis:
@@ -21,8 +19,8 @@ spring:
   mail:
     host: smtp.qq.com
     port: 465
-    username: ${QQ_EMAIL:3086499874@qq.com}
-    password: ${QQ_EMAIL_AUTH_CODE:cphjbrgtndkwdhde}
+    username: ${QQ_EMAIL:}
+    password: ${QQ_EMAIL_AUTH_CODE:}
     properties:
       mail:
         smtp:
@@ -42,7 +40,7 @@ mybatis-plus:
   type-aliases-package: com.synpharm.model.entity
   configuration:
     map-underscore-to-camel-case: true
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl
   global-config:
     db-config:
       id-type: auto
@@ -96,3 +94,9 @@ prediction:
 
 app:
   name: SynPharm
+  # 接口文档（Swagger/Knife4j）是否匿名开放：开发环境 true，生产环境在 docker profile 关闭
+  doc:
+    open: true
+  # CORS 允许的来源（逗号分隔）；生产经 nginx 同源反代，留空即可
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173}

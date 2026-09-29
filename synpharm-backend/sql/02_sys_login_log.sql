@@ -6,8 +6,7 @@
 
 USE synpharm;
 
-DROP TABLE IF EXISTS sys_login_log;
-CREATE TABLE sys_login_log (
+CREATE TABLE IF NOT EXISTS sys_login_log (
     id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '日志ID',
     user_id BIGINT DEFAULT NULL COMMENT '用户ID（登录成功后填充）',
     account VARCHAR(100) NOT NULL COMMENT '登录账号（邮箱/手机号/第三方ID）',

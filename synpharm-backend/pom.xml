@@ -143,6 +143,13 @@
             <version>4.12.0</version>
             <scope>test</scope>
         </dependency>
+
+        <!-- H2 内存库（H-05：Spring 上下文冒烟测试用，MySQL 模式） -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>

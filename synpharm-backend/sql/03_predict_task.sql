@@ -5,8 +5,7 @@
 
 USE synpharm;
 
-DROP TABLE IF EXISTS predict_task;
-CREATE TABLE predict_task (
+CREATE TABLE IF NOT EXISTS predict_task (
     id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '任务ID',
     task_no VARCHAR(32) NOT NULL UNIQUE COMMENT '任务编号',
     user_id BIGINT NOT NULL COMMENT '用户ID',

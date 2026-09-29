@@ -119,7 +119,7 @@ public class QQEmailLoginStrategy implements LoginStrategy {
         }
 
         // ========== 第五步：生成JWT Token ==========
-        String token = jwtUtils.generateToken(user.getId(), user.getEmail(), user.getRole());
+        String token = jwtUtils.generateToken(user.getId(), user.getEmail(), user.getRole(), user.getTokenVersion());
         log.debug("JWT Token生成成功, userId: {}", user.getId());
 
         // ========== 第六步：更新登录信息 ==========

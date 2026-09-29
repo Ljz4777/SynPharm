@@ -5,8 +5,7 @@
 
 USE synpharm;
 
-DROP TABLE IF EXISTS user_favorite;
-CREATE TABLE user_favorite (
+CREATE TABLE IF NOT EXISTS user_favorite (
     id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '收藏ID',
     user_id BIGINT NOT NULL COMMENT '用户ID',
     result_id BIGINT NOT NULL COMMENT '结果ID',

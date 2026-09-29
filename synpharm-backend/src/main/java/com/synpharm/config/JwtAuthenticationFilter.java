@@ -1,5 +1,7 @@
 package com.synpharm.config;
 
+import com.synpharm.model.entity.SysUser;
+import com.synpharm.repository.mapper.SysUserMapper;
 import com.synpharm.utils.JwtUtils;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -18,6 +20,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.concurrent.TimeUnit;
 
 /**
  * JWT认证过滤器
@@ -44,6 +47,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     /** Token黑名单Key前缀 */
     private static final String TOKEN_BLACKLIST_KEY = "token:blacklist:";
+
+    /** 用户验人缓存Key前缀（值格式 "status:tokenVersion"，如 "1:0"） */
+    private static final String USER_AUTH_KEY = "user:auth:";
+
+    /** 用户验人缓存时长（秒）——减少每个请求的查库开销 */
+    private static final long USER_AUTH_CACHE_SECONDS = 60;
+
+    /** 用户Mapper（验人：存在性 + 状态 + token 版本） */
+    private final SysUserMapper sysUserMapper;
 
     /**
      * 执行认证过滤
@@ -79,13 +91,20 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                         return;
                     }
 
-                    // ========== 第四步：解析用户信息 ==========
+                    // ========== 第四步：验人（B-04）——校验用户仍存在、未禁用、token 版本一致 ==========
                     Long userId = jwtUtils.getUserIdFromToken(token);
+                    if (!isUserStillValid(userId, jwtUtils.getTokenVersionFromToken(token))) {
+                        // 不设置认证上下文，放行到链尾由 Spring Security 入口点返回 401
+                        filterChain.doFilter(request, response);
+                        return;
+                    }
+
+                    // ========== 第五步：解析用户信息 ==========
                     String role = jwtUtils.getRoleFromToken(token);
 
                     log.debug("Token验证通过, userId: {}, role: {}", userId, role);
 
-                    // ========== 第五步：设置认证上下文 ==========
+                    // ========== 第六步：设置认证上下文 ==========
                     UsernamePasswordAuthenticationToken authToken =
                             new UsernamePasswordAuthenticationToken(
                                     userId,  // principal：用户ID
@@ -107,12 +126,56 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             }
         } catch (Exception e) {
             // Token验证过程中出现任何异常，都清除认证上下文
-            log.error("JWT认证失败: {}", e.getMessage());
+            log.error("JWT认证失败", e);
             SecurityContextHolder.clearContext();
         }
 
-        // ========== 第六步：继续过滤器链 ==========
+        // ========== 第七步：继续过滤器链 ==========
         filterChain.doFilter(request, response);
+    }
+
+    /**
+     * 验人检查（B-04）：用户存在、状态启用且 token 版本与数据库一致才有效。
+     *
+     * <p>结果以 "status:tokenVersion" 形式缓存 60 秒，避免每个请求都查库；
+     * Redis/DB 异常时 fail-closed（拒绝认证），防止绕过。
+     *
+     * @param userId   token 中的用户ID
+     * @param tokenVer token 中的版本号
+     * @return true=有效，false=无效（用户不存在/已禁用/版本不符/依赖异常）
+     */
+    private boolean isUserStillValid(Long userId, Integer tokenVer) {
+        if (userId == null) {
+            return false;
+        }
+        String cacheKey = USER_AUTH_KEY + userId;
+        try {
+            String cached = redisTemplate.opsForValue().get(cacheKey);
+            boolean enabled;
+            int currentVer;
+            if (cached != null) {
+                String[] parts = cached.split(":", 2);
+                enabled = "1".equals(parts[0]);
+                currentVer = parts.length > 1 ? Integer.parseInt(parts[1]) : 0;
+            } else {
+                SysUser user = sysUserMapper.selectById(userId);
+                if (user == null) {
+                    // 用户不存在同样缓存，避免反复查库
+                    redisTemplate.opsForValue().set(cacheKey, "0:0",
+                            USER_AUTH_CACHE_SECONDS, TimeUnit.SECONDS);
+                    return false;
+                }
+                enabled = Integer.valueOf(1).equals(user.getStatus());
+                currentVer = user.getTokenVersion() == null ? 0 : user.getTokenVersion();
+                redisTemplate.opsForValue().set(cacheKey, (enabled ? "1" : "0") + ":" + currentVer,
+                        USER_AUTH_CACHE_SECONDS, TimeUnit.SECONDS);
+            }
+            return enabled && tokenVer != null && tokenVer == currentVer;
+        } catch (Exception e) {
+            // 验人依赖不可用（Redis/DB 异常）：fail-closed，本次请求按未认证处理
+            log.error("验人检查失败, userId: {}", userId, e);
+            return false;
+        }
     }
 
     /**

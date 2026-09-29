@@ -52,7 +52,8 @@ public class TaskController {
     @GetMapping("/{id}")
     @Operation(summary = "获取任务详情", description = "根据ID查询任务详细信息")
     public Result<?> getTask(@PathVariable Long id) {
-        return Result.success(taskService.getTaskById(id));
+        Long userId = getCurrentUserId();
+        return Result.success(taskService.getTaskById(id, userId));
     }
 
     /**
@@ -66,7 +67,8 @@ public class TaskController {
     @DeleteMapping("/{id}")
     @Operation(summary = "取消任务", description = "取消指定的预测任务")
     public Result<Void> cancelTask(@PathVariable Long id) {
-        taskService.cancelTask(id);
+        Long userId = getCurrentUserId();
+        taskService.cancelTask(id, userId);
         return Result.success();
     }
 

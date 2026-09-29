@@ -1,6 +1,7 @@
 package com.synpharm.config;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -40,6 +41,10 @@ public class SecurityConfig {
     /** CORS配置源（由 CorsConfig 提供） */
     private final CorsConfigurationSource corsConfigurationSource;
 
+    /** 接口文档（Swagger/Knife4j）是否匿名开放：开发 true，生产 false（A-15） */
+    @Value("${app.doc.open:true}")
+    private boolean docOpen;
+
     /**
      * 配置安全过滤链
      * <p>这是Spring Security 6.x的推荐写法。
@@ -61,7 +66,8 @@ public class SecurityConfig {
             )
 
             // ========== 4. 请求权限控制 ==========
-            .authorizeHttpRequests(auth -> auth
+            .authorizeHttpRequests(auth -> {
+                auth
                 // ---- 公开接口（无需认证） ----
                 .requestMatchers(
                     "/api/auth/login",         // 登录
@@ -70,13 +76,20 @@ public class SecurityConfig {
                     "/api/auth/password/reset",// 忘记密码
                     "/actuator/health",        // 健康检查（Docker healthcheck 使用）
                     "/api/system/algorithm-health", // 算法引擎健康检查（监控探测，修复方案 5.7）
-                    "/swagger-ui/**",          // Swagger UI
-                    "/v3/api-docs/**",         // Swagger API文档
-                    "/doc.html",               // Knife4j文档
-                    "/webjars/**",             // Knife4j静态资源
                     "/favicon.ico"             // 网站图标
-                ).permitAll()
+                ).permitAll();
 
+                // ---- 接口文档（A-15）：app.doc.open=true 时匿名开放，生产关闭走认证 ----
+                if (docOpen) {
+                    auth.requestMatchers(
+                        "/swagger-ui/**",          // Swagger UI
+                        "/v3/api-docs/**",         // Swagger API文档
+                        "/doc.html",               // Knife4j文档
+                        "/webjars/**"              // Knife4j静态资源
+                    ).permitAll();
+                }
+
+                auth
                 // ---- 管理员接口（需要admin角色） ----
                 // 注意：Spring 6 PathPatternParser 中 `**` 只能位于路径末尾，
                 // 故 /api/users/{id}/status 用单段通配 `*` 表达
@@ -86,8 +99,8 @@ public class SecurityConfig {
                 ).hasRole("admin")
 
                 // ---- 其他所有请求都需要认证（包括登出接口） ----
-                .anyRequest().authenticated()
-            )
+                .anyRequest().authenticated();
+            })
 
             // ========== 4.5 认证入口点：未登录/Token失效统一返回 401 ==========
             .exceptionHandling(ex -> ex.authenticationEntryPoint((request, response, authException) -> {

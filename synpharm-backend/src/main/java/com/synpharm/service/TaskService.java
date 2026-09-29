@@ -1,6 +1,5 @@
 package com.synpharm.service;
 
-import com.synpharm.dto.response.PredictResultResponse;
 import com.synpharm.model.entity.PredictTask;
 
 import java.util.List;
@@ -28,12 +27,13 @@ public interface TaskService {
     PredictTask createTask(Long userId, String predictType, String inputType, String inputValue, String fileUrl);
 
     /**
-     * 根据任务ID查询任务
-     * 
+     * 根据任务ID查询任务（带归属校验，B-03：只能查询自己的任务）
+     *
      * @param taskId 任务ID
+     * @param userId 当前用户ID
      * @return 任务实体
      */
-    PredictTask getTaskById(Long taskId);
+    PredictTask getTaskById(Long taskId, Long userId);
 
     /**
      * 根据任务编号查询任务
@@ -68,24 +68,18 @@ public interface TaskService {
     void updateTaskProgress(Long taskId, Integer progress);
 
     /**
-     * 取消任务
-     * 
+     * 取消任务（带归属校验，B-03：只能取消自己的任务）
+     *
      * @param taskId 任务ID
+     * @param userId 当前用户ID
      */
-    void cancelTask(Long taskId);
+    void cancelTask(Long taskId, Long userId);
 
     /**
-     * 删除任务
-     * 
+     * 删除任务（带归属校验，B-03：只能删除自己的任务）
+     *
      * @param taskId 任务ID
+     * @param userId 当前用户ID
      */
-    void deleteTask(Long taskId);
-
-    /**
-     * 执行任务预测
-     * 
-     * @param taskId 任务ID
-     * @return 预测结果列表
-     */
-    List<PredictResultResponse> executeTask(Long taskId);
+    void deleteTask(Long taskId, Long userId);
 }

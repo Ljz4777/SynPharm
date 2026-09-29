@@ -12,6 +12,7 @@ import com.synpharm.dto.response.BatchStatusResponse;
 import com.synpharm.dto.response.BatchUploadResponse;
 import com.synpharm.dto.response.PredictResultResponse;
 import com.synpharm.exception.BusinessException;
+import com.synpharm.exception.ErrorCode;
 import com.synpharm.exception.PredictionErrorCode;
 import com.synpharm.exception.PredictionException;
 import com.synpharm.model.entity.BatchTask;
@@ -206,8 +207,8 @@ public class BatchProcessServiceImpl implements BatchProcessService {
                         batchResponse = fastApiClient.predictBatch(requests, task.getAlgoType());
                     } catch (Exception e) {
                         // 批次级失败：本块全部标记失败，批次置 FAIL 后继续抛出（消费者 nack 进死信）
-                        log.error("批量预测批次级失败: batchId={}, 本块行数={}, error={}",
-                                batchId, resolvedRows.size(), e.getMessage());
+                        log.error("批量预测批次级失败: batchId={}, 本块行数={}",
+                                batchId, resolvedRows.size(), e);
                         for (RowInput row : resolvedRows) {
                             markItemFailed(row.item, PredictionErrorCode.FASTAPI_UNAVAILABLE,
                                     "算法引擎调用失败: " + e.getMessage());
@@ -257,7 +258,15 @@ public class BatchProcessServiceImpl implements BatchProcessService {
 
             task.setSuccessCount(countItems(batchId, 2));
             task.setFailCount(countItems(batchId, 3));
-            task.setStatus(2);
+            // A-06：按最终行级统计决定批次状态，全失败不再误报 SUCCESS
+            if (task.getSuccessCount() == 0 && task.getFailCount() > 0) {
+                task.setStatus(3); // FAIL：所有行均失败（含解析失败/引擎 error）
+                task.setErrorMsg("批次内所有行均处理失败");
+            } else if (task.getFailCount() > 0) {
+                task.setStatus(4); // PARTIAL：部分行失败
+            } else {
+                task.setStatus(2); // SUCCESS
+            }
             task.setResultUrl("/api/batch/download/" + batchId);
             task.setProgress(BigDecimal.valueOf(100));
             batchTaskMapper.updateById(task);
@@ -268,7 +277,7 @@ public class BatchProcessServiceImpl implements BatchProcessService {
 
         } catch (Exception e) {
             // 批次级失败：状态落库后继续抛出，消费者 basicNack 进死信队列（修复方案 5.6）
-            log.error("批量任务处理失败: batchId={}, error={}", batchId, e.getMessage());
+            log.error("批量任务处理失败: batchId={}", batchId, e);
             failBatch(task, batchId, e.getMessage());
             throw new RuntimeException("批量任务处理失败: " + e.getMessage(), e);
         }
@@ -281,9 +290,9 @@ public class BatchProcessServiceImpl implements BatchProcessService {
             throw new BusinessException("批次任务不存在");
         }
 
-        // 归属校验：仅本人可查看（修复 IDOR）
-        if (userId != null && !userId.equals(task.getUserId())) {
-            throw new BusinessException("无权访问该批次任务");
+        // 归属校验：仅本人可查看（fail-closed，修复 IDOR）
+        if (userId == null || !userId.equals(task.getUserId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "无权访问该批次任务");
         }
 
         String statusText = switch (task.getStatus()) {
@@ -291,6 +300,7 @@ public class BatchProcessServiceImpl implements BatchProcessService {
             case 1 -> "PROCESSING";
             case 2 -> "SUCCESS";
             case 3 -> "FAIL";
+            case 4 -> "PARTIAL";
             default -> "UNKNOWN";
         };
 
@@ -314,8 +324,8 @@ public class BatchProcessServiceImpl implements BatchProcessService {
         if (task == null) {
             throw new BusinessException("批次任务不存在");
         }
-        if (userId != null && !userId.equals(task.getUserId())) {
-            throw new BusinessException("无权访问该批次任务");
+        if (userId == null || !userId.equals(task.getUserId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "无权访问该批次任务");
         }
 
         // 内存分页（项目未配置 MyBatis-Plus 分页插件，与 ResultServiceImpl 保持一致）
@@ -349,9 +359,9 @@ public class BatchProcessServiceImpl implements BatchProcessService {
             throw new BusinessException("批次任务不存在");
         }
 
-        // 归属校验：仅本人可下载（修复 IDOR）
-        if (userId != null && !userId.equals(task.getUserId())) {
-            throw new BusinessException("无权访问该批次任务");
+        // 归属校验：仅本人可下载（fail-closed，修复 IDOR）
+        if (userId == null || !userId.equals(task.getUserId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "无权访问该批次任务");
         }
 
         String resultPath = resultDir + "/" + batchId + "_result.csv";
@@ -391,7 +401,7 @@ public class BatchProcessServiceImpl implements BatchProcessService {
             }
             log.info("批量明细创建完成: batchId={}, 行数={}", batchId, items.size());
         } catch (IOException e) {
-            log.error("读取批量CSV失败: batchId={}, error={}", batchId, e.getMessage());
+            log.error("读取批量CSV失败: batchId={}", batchId, e);
             throw new BusinessException("读取批量CSV文件失败");
         }
         return items;
@@ -461,7 +471,7 @@ public class BatchProcessServiceImpl implements BatchProcessService {
             response.setId(result.getId());
             response.setCreatedAt(result.getCreatedAt());
         } catch (Exception e) {
-            log.error("批量行落库失败: itemId={}, error={}", item.getId(), e.getMessage());
+            log.error("批量行落库失败: itemId={}", item.getId(), e);
             markItemFailed(item, PredictionErrorCode.MODEL_UNAVAILABLE, "结果落库失败: " + e.getMessage());
         }
     }

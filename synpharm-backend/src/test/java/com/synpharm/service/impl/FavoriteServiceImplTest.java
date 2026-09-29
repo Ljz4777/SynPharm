@@ -103,6 +103,28 @@ class FavoriteServiceImplTest {
     }
 
     @Test
+    void 收藏时userId为空_被拒绝_failClosed() {
+        when(predictResultMapper.selectById(10L)).thenReturn(ownResult);
+
+        BusinessException e = assertThrows(BusinessException.class,
+                () -> service.addFavorite(null, 10L, null));
+        assertEquals(ErrorCode.FORBIDDEN, e.getErrorCode());
+    }
+
+    @Test
+    void 取消时userId为空_被拒绝_failClosed() {
+        UserFavorite favorite = new UserFavorite();
+        favorite.setId(7L);
+        favorite.setUserId(1L);
+        when(favoriteMapper.selectById(7L)).thenReturn(favorite);
+
+        BusinessException e = assertThrows(BusinessException.class,
+                () -> service.removeFavorite(null, 7L));
+        assertEquals(ErrorCode.FORBIDDEN, e.getErrorCode());
+        verify(favoriteMapper, never()).deletePhysically(anyLong());
+    }
+
+    @Test
     void 取消本人收藏_物理删除() {
         UserFavorite favorite = new UserFavorite();
         favorite.setId(7L);

@@ -60,10 +60,11 @@ public class PasswordLoginStrategy implements LoginStrategy {
         }
 
         // ========== 第一步：查询用户 ==========
+        // B-08：未注册与密码错误统一文案，防止账号枚举（错误码仍区分，便于审计）
         SysUser user = userMapper.selectByEmail(email);
         if (user == null) {
             log.warn("密码登录-用户不存在, email: {}", email);
-            throw new BusinessException(ErrorCode.USER_NOT_FOUND, "该邮箱未注册，请先注册");
+            throw new BusinessException(ErrorCode.USER_NOT_FOUND, "邮箱或密码错误");
         }
 
         // ========== 第二步：检查用户状态 ==========
@@ -80,11 +81,11 @@ public class PasswordLoginStrategy implements LoginStrategy {
         }
         if (!passwordEncoder.matches(password, user.getPassword())) {
             log.warn("密码登录-密码错误, userId: {}", user.getId());
-            throw new BusinessException(ErrorCode.PASSWORD_ERROR, "密码错误");
+            throw new BusinessException(ErrorCode.PASSWORD_ERROR, "邮箱或密码错误");
         }
 
         // ========== 第四步：生成JWT Token ==========
-        String token = jwtUtils.generateToken(user.getId(), user.getEmail(), user.getRole());
+        String token = jwtUtils.generateToken(user.getId(), user.getEmail(), user.getRole(), user.getTokenVersion());
         String ip = IpUtils.getClientIp(httpRequest);
         userMapper.updateLoginInfo(user.getId(), LocalDateTime.now(), ip, LocalDateTime.now());
 

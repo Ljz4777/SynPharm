@@ -173,6 +173,27 @@ scripts\start.bat
 | FastAPI | http://localhost:9050 | `http://localhost:9050/docs` |
 | RabbitMQ 管理台 | http://localhost:15672 | 仅内网/本机，账号见 `.env` |
 
+**模型权重说明**：DTI 与 DDI 权重随仓库自带；**PPI 权重约 2.8GB 不在仓库**（GitHub 大小限制），
+首次部署后需在宿主机执行一次（需能访问 HuggingFace）：
+
+```bash
+cd synpharm-fastapi
+python models/FlashPPI/download_weights.py
+```
+
+未下载时 PPI 在健康检查中显示 `weights_missing`（不会产生假结果），DTI/DDI 不受影响。
+
+**邮箱功能配置（注册 / 验证码登录 / 忘记密码需要）**：仓库不含任何邮箱凭据。
+在 `deploy/.env` 中填入你自己的发件邮箱（任意支持 SMTP 的邮箱均可，QQ/163/Gmail 等）：
+
+```bash
+QQ_EMAIL=你的邮箱地址
+QQ_EMAIL_AUTH_CODE=你的SMTP授权码
+```
+
+仅本地测试不想发真邮件时，可设 `CAPTCHA_DEV_MODE=true`——验证码直接显示在接口响应中（生产必须为 `false`）。
+不配置邮箱也不影响运行：游客登录 + 全部预测功能照常可用。
+
 > 端口均通过 `deploy/.env` 的 `*_PORT` 变量配置；数据库首次启动自动执行 `sql/` 初始化脚本。
 >
 > ⚠️ **不要把 `.env.example` 复制覆盖到已有的 `.env`** —— 数据卷里的密码是容器首次初始化时
@@ -184,10 +205,14 @@ scripts\start.bat
 
 ```bash
 # 后端（端口 8080）
+# 必须显式指定 dev profile；数据库密码与 JWT 密钥不再有仓库内默认值，需通过环境变量提供：
+#   PowerShell: $env:SPRING_PROFILES_ACTIVE="dev"; $env:DB_PASSWORD="<本地MySQL密码>"; $env:JWT_SECRET="<至少32字节的本地密钥>"
+#   Linux/macOS: export SPRING_PROFILES_ACTIVE=dev DB_PASSWORD=<本地MySQL密码> JWT_SECRET=<至少32字节的本地密钥>
+# 可选：本地发验证码需另设 QQ_EMAIL / QQ_EMAIL_AUTH_CODE（或临时把 CAPTCHA_DEV_MODE 设为 true）
 cd synpharm-backend
 mvn spring-boot:run
 
-# 算法引擎（端口 8000，模型缺失时自动 mock 降级）
+# 算法引擎（端口 8000，模型缺失时抛错而非 mock）
 cd synpharm-fastapi
 pip install -r requirements.txt
 uvicorn main:app --host 0.0.0.0 --port 8000

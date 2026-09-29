@@ -6,7 +6,7 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://${DB_HOST:mysql}:${DB_PORT:3306}/${DB_NAME:synpharm}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
     username: ${DB_USERNAME:synpharm}
-    password: ${DB_PASSWORD:synpharm_pass}
+    password: ${DB_PASSWORD:}
 
   data:
     redis:
@@ -25,8 +25,8 @@ spring:
   mail:
     host: smtp.qq.com
     port: 465
-    username: ${QQ_EMAIL:noreply@synpharm.com}
-    password: ${QQ_EMAIL_AUTH_CODE:your-auth-code}
+    username: ${QQ_EMAIL:}
+    password: ${QQ_EMAIL_AUTH_CODE:}
     properties:
       mail:
         smtp:
@@ -46,7 +46,7 @@ mybatis-plus:
   type-aliases-package: com.synpharm.model.entity
   configuration:
     map-underscore-to-camel-case: true
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl
   global-config:
     db-config:
       id-type: auto
@@ -69,20 +69,20 @@ management:
         include: health,info
   endpoint:
     health:
-      show-details: always
+      show-details: never
   health:
     # 邮箱为可选功能（未配置 QQ_EMAIL 时不影响服务健康，避免 SMTP 认证失败拖垮健康检查）
     mail:
       enabled: false
 
 knife4j:
-  enable: true
+  enable: false
   setting:
     language: zh_cn
 
 logging:
   level:
-    com.synpharm: debug
+    com.synpharm: info
     com.baomidou.mybatisplus: info
 
 file:
@@ -98,3 +98,8 @@ fastapi:
 
 app:
   name: SynPharm
+  # 生产关闭匿名文档访问；前端经 nginx 同源反代，无需 CORS
+  doc:
+    open: false
+  cors:
+    allowed-origins:
