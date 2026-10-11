@@ -384,8 +384,8 @@ pocketId.value =
   cursor: pointer;
 
   &:hover:not(:disabled) {
-    border-color: $color-brand;
-    color: $color-brand-strong;
+    border-color: $app-accent;
+    color: $app-brand;
   }
 
   &:disabled {
@@ -488,14 +488,14 @@ pocketId.value =
   transition: all $transition-fast;
 
   &:hover:not(:disabled) {
-    border-color: $color-brand;
-    color: $color-brand-strong;
+    border-color: $app-accent;
+    color: $app-brand;
   }
 
   &--active {
-    border-color: $color-brand;
-    background: $color-brand-soft;
-    color: $color-brand-strong;
+    border-color: $app-accent;
+    background: $app-brand-soft;
+    color: $app-brand;
     font-weight: $font-weight-medium;
   }
 
@@ -524,7 +524,7 @@ pocketId.value =
   }
 
   &--active {
-    border-color: $color-brand;
+    border-color: $app-accent;
   }
 
   &:disabled {
@@ -551,7 +551,7 @@ pocketId.value =
   width: 14px;
   height: 14px;
   cursor: pointer;
-  accent-color: $color-brand;
+  accent-color: $app-accent;
 }
 
 /* 口袋信息 */
@@ -602,7 +602,7 @@ pocketId.value =
   }
 
   &--ok {
-    background: $accent-color;
+    background: $app-accent;
   }
 
   &--poor {

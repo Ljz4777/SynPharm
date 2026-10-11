@@ -57,12 +57,53 @@ $transition-normal: 0.25s ease;
 $transition-slow: 0.4s ease;
 
 $sidebar-width: 220px;
-$header-height: 60px;
+$header-height: 64px;
 
 $z-dropdown: 100;
 $z-sticky: 200;
 $z-modal: 300;
 $z-toast: 400;
+
+// ===========================================================================
+// SynPharm 首页科研主题 Tokens（homepage-scoped）
+// 这些 token 仅用于 Home.vue，避免修改上方全局 token 影响其他页面。
+// ===========================================================================
+
+$sp-home-primary: #0C4A6E;
+$sp-home-primary-dark: #083344;
+$sp-home-secondary: #0891B2;
+$sp-home-accent: #10B981;
+
+$sp-home-bg: #F8FAFC;
+$sp-home-surface: #FFFFFF;
+$sp-home-text: #0F172A;
+$sp-home-text-soft: #475569;
+$sp-home-text-muted: #94A3B8;
+$sp-home-border: #E2E8F0;
+
+$sp-home-shadow: 0 4px 20px rgba(15, 23, 42, 0.04);
+$sp-home-shadow-hover: 0 8px 24px rgba(15, 23, 42, 0.06);
+
+$sp-home-radius-sm: 8px;
+$sp-home-radius-md: 10px;
+$sp-home-radius-lg: 14px;
+
+// ---- 首页 3D 视口 tokens（干净浅色科研视窗） ----
+$sp-home-3d-bg: #FFFFFF;                              // 3D 视口白色底（避免透明底的棋盘格）
+$sp-home-3d-border: rgba(12, 74, 110, 0.10);          // 极淡描边
+$sp-home-3d-protein: #0D9488;                         // 蛋白 ribbon（青绿 teal）
+$sp-home-3d-ligand: #10B981;                          // 配体 / interaction（绿）
+$sp-home-3d-shadow: 0 20px 48px -24px rgba(12, 74, 110, 0.18);
+
+// ---- 首页字体 / 断点 ----
+$sp-home-font-family:
+  -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+  'Helvetica Neue', Arial, 'Microsoft YaHei', sans-serif;
+$sp-home-font-mono:
+  ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+
+$bp-md: 768px;
+$bp-lg: 1024px;
 
 // ===========================================================================
 // 以下为语义层 Token
@@ -112,3 +153,26 @@ $ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
 $content-max-width: 1440px;
 // 内容型页面（列表 / 详情 / 表单 / 设置）：1200px，阅读宽度更舒适
 $content-max-width-narrow: 1200px;
+
+// ===========================================================================
+// SynPharm 应用界面品牌 v2（全局顶栏 + 设计工作台）
+//
+// 与首页 $sp-home-* 同一套色（深青主色 / 青强调 / 绿成功），
+// 单独命名以避免改动上方全局 token（仍为旧蓝），从而不影响尚未迁移的
+// 预测中心 / 任务管理等页面。待全站统一后可回填进语义层。
+// ===========================================================================
+
+$app-brand: #0C4A6E;           // 主色 · 深青（选中文字 / 主按钮）
+$app-brand-dark: #083344;      // 主色 hover 加深
+$app-accent: #0891B2;          // 强调 · 青（描边 / hover / 链接）
+$app-accent-strong: #0E7490;   // 青加深（激活态文字 / 图标备选）
+$app-success: #10B981;         // 成功 · 绿（与 $success-color 同值）
+
+$app-brand-soft: #E7F3F8;      // 选中项浅青底
+$app-accent-soft: rgba(8, 145, 178, 0.12);    // 强调浅底（徽标 / 标签）
+$app-accent-softer: rgba(8, 145, 178, 0.06);  // 更浅强调底
+$app-success-soft: rgba(16, 185, 129, 0.12);  // 成功浅底
+
+$app-shell-bg: #0C1E34;        // 顶栏深底
+$app-shell-text: #E2E8F0;      // 顶栏主字
+$app-shell-muted: rgba(148, 163, 184, 0.78);  // 顶栏次字

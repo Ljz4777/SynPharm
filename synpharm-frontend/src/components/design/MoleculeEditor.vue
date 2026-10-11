@@ -9,7 +9,7 @@
     />
 
     <div v-if="status !== 'ready'" class="med__overlay">
-      <span class="med__overlay-icon">{{ overlayIcon }}</span>
+      <span v-if="status !== 'error'" class="u-spinner" aria-hidden="true" />
       <span class="med__overlay-title">{{ overlayTitle }}</span>
       <span v-if="overlayDetail" class="med__overlay-detail">{{ overlayDetail }}</span>
       <button v-if="status === 'error'" type="button" class="med__overlay-btn" @click="reload">
@@ -81,8 +81,6 @@ let mountTimer = 0
 let engineTimer = 0
 let requestSeq = 0
 const pending = new Map<string, Pending>()
-
-const overlayIcon = computed(() => (status.value === 'error' ? '⚠️' : '⏳'))
 
 const overlayTitle = computed(() => {
   switch (status.value) {
@@ -292,10 +290,6 @@ defineExpose({
   text-align: center;
 }
 
-.med__overlay-icon {
-  font-size: 28px;
-}
-
 .med__overlay-title {
   font-size: $font-size-base;
   font-weight: $font-weight-medium;
@@ -322,8 +316,8 @@ defineExpose({
   transition: all $transition-fast;
 
   &:hover {
-    border-color: $color-brand;
-    color: $color-brand-strong;
+    border-color: $app-accent;
+    color: $app-accent-strong;
   }
 }
 </style>

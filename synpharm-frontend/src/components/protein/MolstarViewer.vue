@@ -1,14 +1,32 @@
 <template>
-  <div class="molstar-viewer">
+  <div
+    class="molstar-viewer"
+    :class="{ 'molstar-viewer--frameless': frameless }"
+    :style="rootStyle"
+  >
     <!-- Loading -->
     <div v-if="loading" class="molstar-viewer__status">
-      <span class="molstar-viewer__status-icon">⏳</span>
+      <span class="molstar-viewer__spinner" aria-hidden="true" />
       <span>{{ statusText }}</span>
     </div>
 
     <!-- Error -->
     <div v-if="error" class="molstar-viewer__status molstar-viewer__status--error">
-      <span class="molstar-viewer__status-icon">⚠️</span>
+      <svg
+        class="molstar-viewer__error-icon"
+        viewBox="0 0 24 24"
+        fill="none"
+        aria-hidden="true"
+      >
+        <path
+          d="M10.3 4.1 2.6 17.5a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 4.1a2 2 0 0 0-3.4 0Z"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linejoin="round"
+        />
+        <path d="M12 9v4" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+        <path d="M12 17h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+      </svg>
       <span>{{ errorText }}</span>
     </div>
 
@@ -23,6 +41,7 @@
 <script setup lang="ts">
 import {
   ref,
+  computed,
   watch,
   onMounted,
   onBeforeUnmount,
@@ -39,6 +58,23 @@ const props = withDefaults(
     pdbId: string
     autoRotate?: boolean
     showGrid?: boolean
+    /** 结构文件格式：'pdb' 蛋白质 / 'sdf' 小分子配体（如 imatinib/STI） */
+    format?: 'pdb' | 'sdf'
+    /** 初始显示模式（cartoon / ball-and-stick / spacefill / molecular-surface） */
+    initialRep?: string
+    /** 初始着色（chain-id / element-symbol / uniform / secondary-structure） */
+    initialColor?: string
+    /** 仅当 initialColor === 'uniform' 时生效：指定单色（十六进制，如品牌深蓝 #0C4A6E） */
+    uniformColor?: string
+    /**
+     * 画布底色（十六进制）。Mol* 默认清屏色是黑色，且 CSS 背景盖不住，
+     * 因此需要直接改 renderer 背景色。首页 hero 会传浅色底，其余页面保持黑色。
+     */
+    background?: string
+    /** 画布高度。首页 hero 传 100% 交给外层容器控制，其余页面保持 480px。 */
+    height?: string
+    /** 去掉组件自带的圆角与边框（供首页 hero 等自行包裹容器的场景使用） */
+    frameless?: boolean
     /**
      * 结合口袋几何（仅工作台「口袋」页签传入）。
      * 有值时绘制线框球表示口袋腔体（binding_pocket.center / radius 的可视化）；
@@ -54,6 +90,13 @@ const props = withDefaults(
   {
     autoRotate: false,
     showGrid: false,
+    format: 'pdb',
+    initialRep: 'cartoon',
+    initialColor: 'chain-id',
+    uniformColor: undefined,
+    background: '#000000',
+    height: '480px',
+    frameless: false,
     pocket: null,
     showLigand: false,
   }
@@ -66,6 +109,15 @@ const props = withDefaults(
 const emit = defineEmits<{
   (e: 'structure-loaded'): void
 }>()
+
+/* =========================================================
+ * Root style（背景色 / 高度可被首页 hero 覆盖）
+ * ========================================================= */
+
+const rootStyle = computed(() => ({
+  background: props.background,
+  height: props.height,
+}))
 
 /* =========================================================
  * Vue State
@@ -175,11 +227,51 @@ function enqueue(operation: () => Promise<void>): Promise<void> {
 }
 
 /* =========================================================
- * PDB URL
+ * Structure URL
  * ========================================================= */
 
-function getPdbUrl(id: string): string {
-  return `https://files.rcsb.org/download/${id}.pdb`
+function getStructureUrl(id: string): string {
+  return props.format === 'sdf'
+    ? `https://files.rcsb.org/ligands/download/${id}_ideal.sdf`
+    : `https://files.rcsb.org/download/${id}.pdb`
+}
+
+/* =========================================================
+ * Background
+ *
+ * Mol* 默认清屏色是黑色（renderer.backgroundColor），CSS 背景盖不住，
+ * 必须直接改 renderer 的背景色。首页 hero 传入深蓝底。
+ * ========================================================= */
+
+/**
+ * 把十六进制色值转成 Mol* 的 Color 类型（0xRRGGBB 整数）。
+ * 注意：Mol* 的 Color 不是 {r,g,b} 对象，而是单个整数（见 mol-util/color：Color(hex) => hex）。
+ * 传 {r,g,b} 对象会导致内部位运算得到 NaN，最终渲染成黑色。
+ */
+function hexToColor(hex: string): number {
+  const h = hex.replace('#', '')
+  const full =
+    h.length === 3
+      ? h.split('').map((c) => c + c).join('')
+      : h
+  return parseInt(full, 16)
+}
+
+function applyBackground(): void {
+  const p = plugin
+  if (!p?.canvas3d) return
+  try {
+    if (props.background === 'transparent') {
+      ;(p.canvas3d as any).setProps({ transparentBackground: true })
+    } else {
+      ;(p.canvas3d as any).setProps({
+        renderer: { backgroundColor: hexToColor(props.background) },
+      })
+    }
+    p.canvas3d.requestDraw()
+  } catch (err) {
+    console.warn('[Molstar] set background failed:', err)
+  }
 }
 
 /* =========================================================
@@ -220,23 +312,45 @@ async function initMolstar(): Promise<void> {
     spec.config = [
       ...(spec.config || []),
 
+      // 完全关闭 Mol* 自带的浮动视口控件，避免污染嵌入布局
+      [
+        PluginConfig.Viewport.ShowReset,
+        false,
+      ],
       [
         PluginConfig.Viewport.ShowExpand,
         false,
       ],
-
+      [
+        PluginConfig.Viewport.ShowToggleFullscreen,
+        false,
+      ],
       [
         PluginConfig.Viewport.ShowControls,
         false,
       ],
-
+      [
+        PluginConfig.Viewport.ShowSettings,
+        false,
+      ],
+      [
+        PluginConfig.Viewport.ShowSelectionMode,
+        false,
+      ],
       [
         PluginConfig.Viewport.ShowAnimation,
         false,
       ],
-
       [
-        PluginConfig.Viewport.ShowSelectionMode,
+        PluginConfig.Viewport.ShowTrajectoryControls,
+        false,
+      ],
+      [
+        PluginConfig.Viewport.ShowScreenshotControls,
+        false,
+      ],
+      [
+        PluginConfig.Viewport.ShowIllumination,
         false,
       ],
     ]
@@ -268,11 +382,17 @@ async function initMolstar(): Promise<void> {
 
     console.log('[Molstar] Plugin initialized')
 
+    /* 首页 hero 等场景需要自定义底色（默认黑色，行为不变） */
+    applyBackground()
+
     await loadStructure(props.pdbId)
 
     /* 口袋页签可能在初始化时就已经带了口袋/配体需求 */
     if (props.pocket) await syncPocket()
     if (props.showLigand) await syncLigand()
+
+    /* 初始就开启的自动旋转（如首页 hero）在首次加载后启动 */
+    if (props.autoRotate) startAutoRotate()
 
   } catch (err) {
     console.error(
@@ -341,20 +461,20 @@ async function loadStructure(
       removeAllGrids()
 
       /* -----------------------------------------
-       * Download PDB
+       * Download structure
        * ----------------------------------------- */
 
-      const pdbUrl = getPdbUrl(pdbId)
+      const structureUrl = getStructureUrl(pdbId)
 
       console.log(
         '[Molstar] loading:',
-        pdbUrl
+        structureUrl
       )
 
       const data =
         await p.builders.data.download(
           {
-            url: pdbUrl,
+            url: structureUrl,
           },
           {
             state: {
@@ -370,7 +490,7 @@ async function loadStructure(
       const trajectory =
         await p.builders.structure.parseTrajectory(
           data,
-          'pdb'
+          props.format
         )
 
       /* -----------------------------------------
@@ -404,15 +524,18 @@ async function loadStructure(
         await p.builders.structure.representation.addRepresentation(
           structure,
           {
-            type: 'cartoon',
-            color: 'chain-id',
+            type: props.initialRep,
+            color: props.initialColor,
+            ...(props.initialColor === 'uniform' && props.uniformColor
+              ? { colorParams: { value: hexToColor(props.uniformColor) } }
+              : {}),
           } as any
         )
 
       mainRepresentation = representation
 
-      currentRepType = 'cartoon'
-      currentColor = 'chain-id'
+      currentRepType = props.initialRep
+      currentColor = props.initialColor
 
       currentPdbId = pdbId
 
@@ -1725,6 +1848,12 @@ onBeforeUnmount(() => {
   background: #000;
 }
 
+/* 首页 hero：外层容器自行负责圆角/边框，组件内部不重复绘制 */
+.molstar-viewer--frameless {
+  border-radius: 0;
+  border: none;
+}
+
 .molstar-viewer__canvas {
   width: 100%;
   height: 100%;
@@ -1753,8 +1882,25 @@ onBeforeUnmount(() => {
   color: $error-color;
 }
 
-.molstar-viewer__status-icon {
-  font-size: 36px;
+.molstar-viewer__spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(255, 255, 255, 0.2);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: molstar-spin 0.8s linear infinite;
+}
+
+.molstar-viewer__error-icon {
+  width: 32px;
+  height: 32px;
+  color: $error-color;
+}
+
+@keyframes molstar-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 </style>

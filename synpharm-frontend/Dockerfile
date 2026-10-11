@@ -8,7 +8,7 @@
 # =============================================================================
 
 # ---------- 阶段一：构建 ----------
-FROM node:20-alpine AS build
+FROM node:24-bookworm-slim AS build
 
 WORKDIR /build
 

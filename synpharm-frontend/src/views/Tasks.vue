@@ -2,83 +2,156 @@
   <div class="tk">
     <Sidebar />
     <main class="tk__main">
+      <!-- ==================== 页头 ==================== -->
       <header class="tk__header">
-        <div>
+        <div class="tk__header-main">
           <h1 class="tk__title">任务管理</h1>
-          <p class="tk__subtitle">查看和管理所有预测任务</p>
+          <p class="tk__subtitle">查看和管理全部预测任务</p>
         </div>
-        <button class="tk__btn tk__btn--primary" @click="goCreate">创建任务</button>
+        <button class="tk__create" @click="goCreate">创建任务</button>
       </header>
 
+      <!-- ==================== 状态概览 / 筛选 ==================== -->
       <div class="tk__tabs">
         <button
           v-for="tab in tabs"
           :key="tab.value"
-          @click="activeTab = tab.value"
           class="tk__tab"
           :class="{ 'tk__tab--active': activeTab === tab.value }"
+          @click="activeTab = tab.value"
         >
           {{ tab.label }}
           <span v-if="tab.count > 0" class="tk__tab-count">{{ tab.count }}</span>
         </button>
       </div>
 
-      <section class="tk__list">
-        <div v-if="loading" class="tk__state">加载中...</div>
-        <div v-else-if="loadError" class="tk__state tk__state--error">{{ loadError }}</div>
-        <template v-else>
-          <div v-for="task in filteredTasks" :key="task.id" class="tk__card">
-            <div class="tk__card-head">
-              <div class="tk__card-info">
-                <span class="tk__card-name">{{ task.taskNo || task.name || task.id }}</span>
-                <span class="tk__card-type">{{ getTypeText(task.predictType || task.type || '') }}</span>
-              </div>
-              <span class="tk__status" :class="`tk__status--${task.status}`">{{ getStatusText(task.status) }}</span>
-            </div>
+      <section class="tk__filters">
+        <div class="tk__search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" />
+            <path d="m21 21-4.3-4.3" />
+          </svg>
+          <input v-model="filters.search" type="text" placeholder="搜索任务编号或名称" />
+        </div>
 
-            <div v-if="task.status === 'running'" class="tk__progress">
-              <div class="tk__progress-track">
-                <div class="tk__progress-fill" :style="{ width: task.progress + '%' }"></div>
-              </div>
-              <span class="tk__progress-text">{{ task.progress }}%</span>
-            </div>
+        <select v-model="filters.type" class="tk__select">
+          <option value="all">全部类型</option>
+          <option value="dti">药物-靶点 (DTI)</option>
+          <option value="ppi">蛋白-蛋白 (PPI)</option>
+          <option value="ddi">药物-药物 (DDI)</option>
+        </select>
+      </section>
 
-            <div class="tk__card-foot">
-              <span class="tk__date">{{ formatDate(task.createdAt) }}</span>
-              <div class="tk__actions">
-                <button v-if="task.status === 'running'" class="tk__action" @click="handlePause(task)">暂停</button>
-                <button class="tk__action" @click="handleView(task)">查看任务</button>
-                <button v-if="task.status === 'running' || task.status === 'pending'" class="tk__action tk__action--danger" @click="handleCancel(task)">取消任务</button>
-              </div>
-            </div>
+      <!-- ==================== 任务表格 ==================== -->
+      <section class="tk__card">
+        <div v-if="loading" class="tk__state">
+          <span class="u-spinner" />
+          <span>加载中…</span>
+        </div>
+
+        <div v-else-if="loadError" class="tk__state tk__state--error">
+          <span>{{ loadError }}</span>
+          <button class="tk__retry" @click="loadTasks">重试</button>
+        </div>
+
+        <template v-else-if="filteredTasks.length">
+          <div class="tk__table-wrap">
+            <table class="tk__table">
+              <thead>
+                <tr>
+                  <th class="tk__th tk__th--task">任务</th>
+                  <th class="tk__th tk__th--type">类型</th>
+                  <th class="tk__th tk__th--status">状态</th>
+                  <th class="tk__th tk__th--progress">进度</th>
+                  <th class="tk__th tk__th--time">创建时间</th>
+                  <th class="tk__th tk__th--ops">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="task in pagedTasks" :key="task.id" class="tk__row">
+                  <td class="tk__td tk__td--task">
+                    <span class="tk__task-name">{{ task.taskNo || task.name || task.id }}</span>
+                  </td>
+                  <td class="tk__td tk__td--type">
+                    <span class="tk__type" :class="`tk__type--${taskTypeKey(task)}`">{{ typeLabel(taskType(task)) }}</span>
+                  </td>
+                  <td class="tk__td tk__td--status">
+                    <StatusTag kind="status" :value="task.status" />
+                  </td>
+                  <td class="tk__td tk__td--progress">
+                    <template v-if="task.status === 'running'">
+                      <div class="tk__progress">
+                        <div class="tk__progress-fill" :style="{ width: (task.progress ?? 0) + '%' }" />
+                      </div>
+                      <span class="tk__progress-text">{{ task.progress ?? 0 }}%</span>
+                    </template>
+                    <span v-else class="tk__progress-text">{{ task.status === 'completed' ? '100%' : '—' }}</span>
+                  </td>
+                  <td class="tk__td tk__td--time">{{ formatDateTime(task.createdAt) }}</td>
+                  <td class="tk__td tk__td--ops">
+                    <button class="tk__op" @click="handleView(task)">查看</button>
+                    <button
+                      v-if="task.status === 'running' || task.status === 'pending'"
+                      class="tk__op tk__op--danger"
+                      @click="handleCancel(task)"
+                    >取消</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
 
-          <div v-if="filteredTasks.length === 0" class="tk__empty">
-            <span class="tk__empty-icon">📋</span>
-            <span class="tk__empty-text">暂无{{ getTabLabel(activeTab) }}任务</span>
+          <!-- 分页 -->
+          <div class="tk__pager">
+            <span class="tk__pager-info">共 {{ filteredTasks.length }} 条 · 每页</span>
+            <select v-model="pageSize" class="tk__page-size">
+              <option :value="10">10</option>
+              <option :value="20">20</option>
+              <option :value="50">50</option>
+            </select>
+            <div class="tk__pager-nav">
+              <button class="tk__page-btn" :disabled="page <= 1" @click="page--">上一页</button>
+              <span class="tk__page-cur">{{ page }} / {{ totalPages }}</span>
+              <button class="tk__page-btn" :disabled="page >= totalPages" @click="page++">下一页</button>
+            </div>
           </div>
         </template>
+
+        <EmptyState
+          v-else
+          icon="📋"
+          :title="tasks.length ? '没有匹配的任务' : '暂无预测任务'"
+          :description="tasks.length
+            ? '当前筛选条件下没有任务，可调整筛选条件或清空筛选。'
+            : '到预测中心发起一次预测，任务会出现在这里。'"
+        >
+          <button v-if="tasks.length" class="tk__retry" @click="clearFilters">清空筛选</button>
+        </EmptyState>
       </section>
     </main>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { computed, reactive, ref, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getTasks, cancelTask } from '@/api/task'
 import Sidebar from '@/components/Sidebar.vue'
+import StatusTag from '@/components/ui/StatusTag.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
+import { formatDateTime } from '@/utils/display'
 import type { Task } from '@/types'
 
 const router = useRouter()
 
-const activeTab = ref('all')
 const tasks = ref<Task[]>([])
 const loading = ref(false)
 const loadError = ref('')
 
-const loadTasks = async () => {
+/* ------------------------------- 数据装载 ------------------------------- */
+
+async function loadTasks(): Promise<void> {
   loading.value = true
   loadError.value = ''
   try {
@@ -92,75 +165,102 @@ const loadTasks = async () => {
 
 onMounted(loadTasks)
 
-const goCreate = () => {
-  router.push('/predict')
+/* ------------------------------- 概览 / 筛选 ------------------------------- */
+
+const activeTab = ref('all')
+
+const filters = reactive({
+  search: '',
+  type: 'all'
+})
+
+const TYPE_LABELS: Record<string, string> = {
+  dti: '药物-靶点',
+  ppi: '蛋白-蛋白',
+  ddi: '药物-药物'
 }
 
+const taskType = (t: Task): string => (t.predictType || t.type || '').toLowerCase()
+const taskTypeKey = (t: Task): string => taskType(t) || 'none'
+const typeLabel = (t?: string): string => (t ? TYPE_LABELS[t.toLowerCase()] || t : '—')
+
+const counts = computed(() => ({
+  all: tasks.value.length,
+  running: tasks.value.filter((t) => t.status === 'running').length,
+  pending: tasks.value.filter((t) => t.status === 'pending').length,
+  completed: tasks.value.filter((t) => t.status === 'completed').length,
+  failed: tasks.value.filter((t) => t.status === 'failed').length
+}))
+
 const tabs = computed(() => [
-  { value: 'all', label: '全部', count: tasks.value.length },
-  { value: 'running', label: '运行中', count: tasks.value.filter((t: Task) => t.status === 'running').length },
-  { value: 'pending', label: '待处理', count: tasks.value.filter((t: Task) => t.status === 'pending').length },
-  { value: 'completed', label: '已完成', count: tasks.value.filter((t: Task) => t.status === 'completed').length },
-  { value: 'failed', label: '失败', count: tasks.value.filter((t: Task) => t.status === 'failed').length }
+  { value: 'all', label: '全部', count: counts.value.all },
+  { value: 'running', label: '运行中', count: counts.value.running },
+  { value: 'pending', label: '待处理', count: counts.value.pending },
+  { value: 'completed', label: '已完成', count: counts.value.completed },
+  { value: 'failed', label: '失败', count: counts.value.failed }
 ])
 
 const filteredTasks = computed(() => {
-  if (activeTab.value === 'all') {
-    return tasks.value
+  let list = [...tasks.value]
+
+  if (activeTab.value !== 'all') {
+    list = list.filter((t) => t.status === activeTab.value)
   }
-  return tasks.value.filter((t: Task) => t.status === activeTab.value)
+  if (filters.type !== 'all') {
+    list = list.filter((t) => taskType(t) === filters.type)
+  }
+  if (filters.search) {
+    const q = filters.search.toLowerCase()
+    list = list.filter((t) =>
+      (t.taskNo || '').toLowerCase().includes(q) ||
+      (t.name || '').toLowerCase().includes(q) ||
+      String(t.id).toLowerCase().includes(q)
+    )
+  }
+
+  list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+  return list
 })
 
-const getStatusText = (status: string): string => {
-  const texts: Record<string, string> = {
-    completed: '已完成',
-    running: '运行中',
-    pending: '待处理',
-    failed: '失败',
-    cancelled: '已取消'
-  }
-  return texts[status] || status
+/* ------------------------------- 分页（客户端） ------------------------------- */
+
+const page = ref(1)
+const pageSize = ref(10)
+
+const totalPages = computed(() =>
+  Math.max(1, Math.ceil(filteredTasks.value.length / pageSize.value))
+)
+
+const pagedTasks = computed(() => {
+  const start = (page.value - 1) * pageSize.value
+  return filteredTasks.value.slice(start, start + pageSize.value)
+})
+
+watch([activeTab, () => filters.type, () => filters.search, pageSize], () => {
+  page.value = 1
+})
+
+watch(totalPages, (tp) => {
+  if (page.value > tp) page.value = tp
+})
+
+/* ------------------------------- 操作 ------------------------------- */
+
+function clearFilters() {
+  activeTab.value = 'all'
+  filters.search = ''
+  filters.type = 'all'
 }
 
-const getTypeText = (type: string): string => {
-  const texts: Record<string, string> = {
-    dti: '药物-靶点',
-    ppi: '蛋白-蛋白',
-    ddi: '药物-药物'
-  }
-  return texts[type] || type
+function goCreate() {
+  router.push('/predict')
 }
 
-const getTabLabel = (tab: string): string => {
-  const labels: Record<string, string> = {
-    all: '',
-    running: '运行中',
-    pending: '待处理',
-    completed: '已完成',
-    failed: '失败'
-  }
-  return labels[tab] || ''
-}
-
-const formatDate = (dateString: string): string => {
-  const date = new Date(dateString)
-  return date.toLocaleDateString('zh-CN', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
-}
-
-const handlePause = (task: Task) => {
-  console.log('暂停任务:', task.id)
-}
-
-const handleView = (task: Task) => {
+function handleView(task: Task) {
   router.push(`/tasks/${task.id}`)
 }
 
-const handleCancel = async (task: Task) => {
+async function handleCancel(task: Task) {
   try {
     await ElMessageBox.confirm('确定取消该预测任务吗？', '提示', {
       confirmButtonText: '确定',
@@ -182,457 +282,426 @@ const handleCancel = async (task: Task) => {
 </script>
 
 <style lang="scss" scoped>
-.tasks {
-  display: flex;
-  min-height: 100vh;
-  background: $bg-secondary;
-  padding-top: $header-height;
-}
-
-.tasks__content {
-  flex: 1;
-  padding: $spacing-lg;
-}
-
-.tasks__header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: $spacing-xl;
-}
-
-.tasks__title {
-  font-size: 24px;
-  font-weight: 600;
-  color: $text-primary;
-  margin-bottom: $spacing-xs;
-}
-
-.tasks__subtitle {
-  font-size: $font-size-sm;
-  color: $text-muted;
-}
-
-.tasks__btn {
-  padding: $spacing-sm $spacing-lg;
-  border-radius: $border-radius-md;
-  font-size: $font-size-sm;
-  font-weight: 500;
-  cursor: pointer;
-  border: none;
-  transition: all $transition-fast;
-  
-  &--primary {
-    background: $primary-color;
-    color: #ffffff;
-    
-    &:hover {
-      background: $primary-dark;
-    }
-  }
-}
-
-.tasks__tabs {
-  display: flex;
-  gap: $spacing-sm;
-  margin-bottom: $spacing-xl;
-}
-
-.tasks__tab {
-  display: flex;
-  align-items: center;
-  gap: $spacing-xs;
-  padding: $spacing-sm $spacing-lg;
-  background: $bg-primary;
-  border: 1px solid $border-light;
-  border-radius: $border-radius-md;
-  font-size: $font-size-sm;
-  color: $text-secondary;
-  cursor: pointer;
-  transition: all $transition-fast;
-  
-  &:hover {
-    border-color: $border-color;
-  }
-  
-  &--active {
-    background: $primary-color;
-    color: #ffffff;
-    border-color: $primary-color;
-  }
-}
-
-.tasks__tab-count {
-  font-size: $font-size-xs;
-  padding: 1px 6px;
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 100px;
-}
-
-.tasks__list {
-  display: flex;
-  flex-direction: column;
-  gap: $spacing-lg;
-}
-
-.tasks__card {
-  background: $bg-primary;
-  padding: $spacing-lg;
-  border-radius: $border-radius-lg;
-  border: 1px solid $border-light;
-}
-
-.tasks__card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: $spacing-md;
-}
-
-.tasks__card-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.tasks__card-name {
-  font-size: $font-size-lg;
-  font-weight: 600;
-  color: $text-primary;
-}
-
-.tasks__card-type {
-  font-size: $font-size-xs;
-  color: $text-muted;
-}
-
-.tasks__status {
-  font-size: $font-size-xs;
-  font-weight: 500;
-  padding: 3px 10px;
-  border-radius: 100px;
-  
-  &--completed {
-    background: rgba($success-color, 0.1);
-    color: $success-color;
-  }
-  
-  &--running {
-    background: rgba($info-color, 0.1);
-    color: $info-color;
-  }
-  
-  &--pending {
-    background: rgba($warning-color, 0.1);
-    color: $warning-color;
-  }
-  
-  &--failed {
-    background: rgba($error-color, 0.1);
-    color: $error-color;
-  }
-}
-
-.tasks__progress {
-  display: flex;
-  align-items: center;
-  gap: $spacing-md;
-  margin-bottom: $spacing-md;
-}
-
-.tasks__progress-track {
-  flex: 1;
-  height: 6px;
-  background: $bg-secondary;
-  border-radius: 3px;
-  overflow: hidden;
-}
-
-.tasks__progress-fill {
-  height: 100%;
-  background: $primary-color;
-  border-radius: 3px;
-  transition: width 0.5s ease;
-}
-
-.tasks__progress-text {
-  font-size: $font-size-xs;
-  color: $text-muted;
-  width: 40px;
-  text-align: right;
-}
-
-.tasks__card-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding-top: $spacing-md;
-  border-top: 1px solid $border-light;
-}
-
-.tasks__card-date {
-  font-size: $font-size-xs;
-  color: $text-muted;
-}
-
-.tasks__card-actions {
-  display: flex;
-  gap: $spacing-sm;
-}
-
-.tasks__action-btn {
-  padding: $spacing-xs $spacing-md;
-  background: transparent;
-  border: 1px solid $border-color;
-  border-radius: $border-radius-sm;
-  font-size: $font-size-xs;
-  color: $text-secondary;
-  cursor: pointer;
-  transition: all $transition-fast;
-  
-  &:hover {
-    background: $bg-secondary;
-  }
-}
-
-.tasks__empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: $spacing-2xl;
-}
-
-.tasks__empty-icon {
-  font-size: 48px;
-  margin-bottom: $spacing-md;
-}
-
-.tasks__empty-text {
-  font-size: $font-size-base;
-  color: $text-muted;
-}
-</style>
-
-<style lang="scss" scoped>
-/* ===================== 任务管理（新风格） ===================== */
+/* ===================== 任务管理（数据工作台） ===================== */
 .tk {
   display: flex;
   min-height: 100vh;
-  background: $bg-secondary;
+  background: $color-canvas;
   padding-top: $header-height;
 }
 
-// 宽度与居中由 styles/base.scss 的全局规则统一提供
+// 宽度与居中由 styles/base.scss 的全局规则统一提供（1200px 窄幅）
 .tk__main {
   flex: 1;
-  padding: $spacing-xl;
+  padding: $spacing-lg $spacing-xl $spacing-2xl;
 }
 
+/* ---------------- 页头 ---------------- */
 .tk__header {
   display: flex;
-  justify-content: space-between;
   align-items: flex-end;
-  margin-bottom: $spacing-lg;
+  justify-content: space-between;
+  gap: $spacing-lg;
+  padding: $spacing-md 0 $spacing-xl;
 }
 
-.tk__title {
-  font-size: $font-size-2xl;
-  font-weight: 700;
-  color: $text-primary;
-}
+.tk__header-main {
+  position: relative;
+  padding-left: $spacing-md;
+  min-width: 0;
 
-.tk__subtitle {
-  margin-top: $spacing-xs;
-  font-size: $font-size-sm;
-  color: $text-muted;
-}
-
-.tk__btn {
-  padding: $spacing-sm $spacing-lg;
-  border: none;
-  border-radius: $border-radius-md;
-  font-size: $font-size-sm;
-  cursor: pointer;
-  transition: $transition-fast;
-  &--primary {
-    background: $primary-color;
-    color: #fff;
-    &:hover { background: $primary-light; }
+  &::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 5px;
+    bottom: 5px;
+    width: 3px;
+    border-radius: $radius-pill;
+    background: linear-gradient(180deg, $app-accent, $app-brand);
   }
 }
 
+.tk__title {
+  font-size: $font-size-xl;
+  font-weight: $font-weight-semibold;
+  line-height: 1.3;
+  color: $color-text;
+}
+
+.tk__subtitle {
+  margin-top: 4px;
+  font-size: $font-size-sm;
+  color: $color-text-faint;
+}
+
+.tk__create {
+  flex-shrink: 0;
+  padding: $spacing-sm $spacing-lg;
+  border: none;
+  border-radius: $radius-control;
+  background: $app-accent;
+  color: #fff;
+  font-size: $font-size-base;
+  font-weight: $font-weight-medium;
+  cursor: pointer;
+  transition: background $transition-fast;
+
+  &:hover { background: $app-accent-strong; }
+}
+
+/* ---------------- 状态概览 Tabs ---------------- */
 .tk__tabs {
   display: inline-flex;
-  background: $bg-tertiary;
-  border-radius: $border-radius-md;
+  background: $color-surface-sunken;
+  border-radius: $radius-control;
   padding: 4px;
   gap: 4px;
-  margin-bottom: $spacing-lg;
+  margin-bottom: $spacing-md;
 }
 
 .tk__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: $spacing-sm $spacing-lg;
   border: none;
   background: transparent;
   border-radius: $border-radius-sm;
-  font-size: $font-size-sm;
-  color: $text-secondary;
+  font-size: $font-size-base;
+  color: $color-text-soft;
   cursor: pointer;
   transition: $transition-fast;
-  &:hover { color: $text-primary; }
+
+  &:hover { color: $color-text; }
+
   &--active {
-    background: $bg-primary;
-    color: $primary-color;
-    font-weight: 600;
+    background: $color-surface;
+    color: $app-brand;
+    font-weight: $font-weight-medium;
     box-shadow: $shadow-sm;
   }
 }
 
 .tk__tab-count {
-  margin-left: 4px;
-  padding: 1px 6px;
-  border-radius: 999px;
-  background: rgba(59, 130, 246, 0.15);
-  color: $accent-color;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: $radius-pill;
+  background: $color-surface-sunken;
+  color: $color-text-faint;
   font-size: $font-size-xs;
-}
-
-.tk__list {
-  display: flex;
-  flex-direction: column;
-  gap: $spacing-md;
-}
-
-.tk__state {
-  padding: $spacing-2xl;
+  line-height: 18px;
   text-align: center;
-  color: $text-muted;
-  &--error { color: $error-color; }
 }
 
-.tk__card {
-  background: $bg-primary;
-  border: 1px solid $border-color;
-  border-radius: $border-radius-lg;
-  padding: $spacing-md $spacing-lg;
-  box-shadow: $shadow-sm;
+.tk__tab--active .tk__tab-count {
+  background: $app-accent-soft;
+  color: $app-accent-strong;
 }
 
-.tk__card-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.tk__card-info {
+/* ---------------- 筛选区 ---------------- */
+.tk__filters {
   display: flex;
   align-items: center;
   gap: $spacing-sm;
+  flex-wrap: wrap;
+  margin-bottom: $spacing-lg;
 }
 
-.tk__card-name {
+.tk__search {
+  position: relative;
+  flex: 1;
+  min-width: 220px;
+
+  svg {
+    position: absolute;
+    left: $spacing-md;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 16px;
+    height: 16px;
+    color: $color-text-faint;
+    pointer-events: none;
+  }
+
+  input {
+    width: 100%;
+    padding: $spacing-sm $spacing-md $spacing-sm 38px;
+    border: 1px solid $color-border;
+    border-radius: $radius-control;
+    font-size: $font-size-base;
+    color: $color-text;
+    background: $color-surface;
+    font-family: inherit;
+
+    &::placeholder { color: $text-light; }
+
+    &:focus {
+      outline: none;
+      border-color: $app-accent;
+      box-shadow: 0 0 0 3px rgba(8, 145, 178, 0.12);
+    }
+  }
+}
+
+.tk__select {
+  padding: $spacing-sm $spacing-md;
+  border: 1px solid $color-border;
+  border-radius: $radius-control;
   font-size: $font-size-base;
-  font-weight: 600;
-  color: $text-primary;
+  color: $color-text;
+  background: $color-surface;
+  font-family: inherit;
+  cursor: pointer;
+
+  &:focus { outline: none; border-color: $app-accent; }
 }
 
-.tk__card-type {
-  padding: 2px 8px;
-  background: $bg-tertiary;
-  border-radius: 999px;
+/* ---------------- 卡片 / 表格 ---------------- */
+.tk__card {
+  background: $color-surface;
+  border: 1px solid $color-border;
+  border-radius: $radius-card;
+  box-shadow: $shadow-card;
+  overflow: hidden;
+}
+
+.tk__table-wrap {
+  overflow-x: auto;
+}
+
+.tk__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: $font-size-sm;
+}
+
+.tk__th {
+  padding: $spacing-sm $spacing-md;
+  text-align: left;
   font-size: $font-size-xs;
-  color: $text-secondary;
+  font-weight: $font-weight-semibold;
+  color: $color-text-faint;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  background: $color-surface-alt;
+  border-bottom: 1px solid $color-border;
 }
 
-.tk__status {
+.tk__row {
+  border-bottom: 1px solid $color-border-soft;
+  transition: background $transition-fast;
+
+  &:hover { background: $app-accent-softer; }
+  &:last-child { border-bottom: none; }
+}
+
+.tk__td {
+  padding: $spacing-sm $spacing-md;
+  vertical-align: middle;
+  color: $color-text;
+}
+
+/* 任务列 */
+.tk__td--task {
+  min-width: 160px;
+
+  .tk__task-name {
+    font-weight: $font-weight-medium;
+    color: $color-text;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: monospace;
+    font-size: $font-size-sm;
+  }
+}
+
+/* 类型徽标 */
+.tk__type {
+  display: inline-block;
   padding: 2px 10px;
-  border-radius: 999px;
+  border-radius: $radius-pill;
   font-size: $font-size-xs;
-  font-weight: 500;
-  &--completed { background: rgba(16, 185, 129, 0.12); color: $success-color; }
-  &--running { background: rgba(59, 130, 246, 0.12); color: $info-color; }
-  &--pending { background: rgba(148, 163, 184, 0.15); color: $text-muted; }
-  &--failed { background: rgba(239, 68, 68, 0.12); color: $error-color; }
-  &--cancelled { background: rgba(148, 163, 184, 0.15); color: $text-muted; }
+  font-weight: $font-weight-medium;
+  white-space: nowrap;
+  background: $app-accent-soft;
+  color: $app-accent-strong;
+
+  &--ppi { background: rgba(16, 185, 129, 0.12); color: #0e9f6e; }
+  &--ddi { background: rgba(139, 92, 246, 0.12); color: #7c3aed; }
+  &--none { background: $color-surface-sunken; color: $color-text-faint; }
+}
+
+/* 进度列 */
+.tk__td--progress {
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+  min-width: 140px;
 }
 
 .tk__progress {
-  display: flex;
-  align-items: center;
-  gap: $spacing-sm;
-  margin-top: $spacing-md;
-}
-
-.tk__progress-track {
   flex: 1;
   height: 6px;
-  background: $border-color;
-  border-radius: 999px;
+  background: $color-border;
+  border-radius: $radius-pill;
   overflow: hidden;
+  min-width: 60px;
 }
 
 .tk__progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, $accent-color, $accent-light);
-  border-radius: 999px;
-  transition: width 0.3s;
+  background: linear-gradient(90deg, $app-accent, $app-brand);
+  border-radius: $radius-pill;
+  transition: width 0.3s ease;
 }
 
 .tk__progress-text {
   font-size: $font-size-xs;
-  color: $text-muted;
+  color: $color-text-faint;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
-.tk__card-foot {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: $spacing-md;
-  padding-top: $spacing-sm;
-  border-top: 1px solid $border-light;
+/* 时间列 */
+.tk__td--time {
+  white-space: nowrap;
+  color: $color-text-faint;
+  font-variant-numeric: tabular-nums;
 }
 
-.tk__date {
-  font-size: $font-size-xs;
-  color: $text-muted;
+/* 操作列 */
+.tk__td--ops {
+  white-space: nowrap;
+  text-align: right;
 }
 
-.tk__actions {
-  display: flex;
-  gap: $spacing-sm;
-}
-
-.tk__action {
-  border: none;
+.tk__op {
+  padding: 4px $spacing-sm;
+  border: 1px solid $color-border;
+  border-radius: $border-radius-sm;
   background: transparent;
-  color: $accent-color;
+  color: $color-text-soft;
   font-size: $font-size-xs;
   cursor: pointer;
-  padding: $spacing-xs $spacing-sm;
-  border-radius: $border-radius-sm;
-  transition: $transition-fast;
-  &:hover { background: rgba(59, 130, 246, 0.08); }
+  transition: all $transition-fast;
+
+  & + & { margin-left: $spacing-xs; }
+
+  &:hover {
+    border-color: $app-accent;
+    color: $app-accent-strong;
+  }
+
   &--danger {
-    color: $error-color;
-    &:hover { background: rgba(239, 68, 68, 0.08); }
+    border-color: transparent;
+    color: $color-text-faint;
+    &:hover { color: $error-color; border-color: rgba(239, 68, 68, 0.3); }
   }
 }
 
-.tk__empty {
+/* ---------------- 分页 ---------------- */
+.tk__pager {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  padding: $spacing-3xl;
-  color: $text-muted;
+  gap: $spacing-md;
+  padding: $spacing-md $spacing-lg;
+  border-top: 1px solid $color-border-soft;
+  font-size: $font-size-sm;
+  color: $color-text-faint;
 }
 
-.tk__empty-icon {
-  font-size: 40px;
-  margin-bottom: $spacing-md;
+.tk__pager-info {
+  white-space: nowrap;
 }
 
-.tk__empty-text {
+.tk__page-size {
+  padding: 4px $spacing-sm;
+  border: 1px solid $color-border;
+  border-radius: $border-radius-sm;
+  background: $color-surface;
+  color: $color-text;
+  font-size: $font-size-sm;
+  cursor: pointer;
+}
+
+.tk__pager-nav {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+}
+
+.tk__page-cur {
+  font-variant-numeric: tabular-nums;
+  color: $color-text-soft;
+}
+
+.tk__page-btn {
+  padding: 4px $spacing-md;
+  border: 1px solid $color-border;
+  border-radius: $border-radius-sm;
+  background: $color-surface;
+  color: $color-text-soft;
+  font-size: $font-size-sm;
+  cursor: pointer;
+  transition: all $transition-fast;
+
+  &:hover:not(:disabled) {
+    border-color: $app-accent;
+    color: $app-accent-strong;
+  }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+}
+
+/* ---------------- 状态 ---------------- */
+.tk__state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: $spacing-sm;
+  padding: $spacing-2xl;
+  color: $color-text-faint;
   font-size: $font-size-base;
+
+  &--error {
+    flex-direction: column;
+    color: $error-color;
+  }
+}
+
+.tk__retry {
+  padding: $spacing-xs $spacing-lg;
+  border: 1px solid $color-border;
+  border-radius: $radius-control;
+  background: $color-surface;
+  color: $color-text-soft;
+  font-size: $font-size-sm;
+  cursor: pointer;
+  transition: all $transition-fast;
+
+  &:hover { border-color: $app-accent; color: $app-accent-strong; }
+}
+
+/* ---------------- 响应式 ---------------- */
+@media (max-width: 900px) {
+  .tk__filters {
+    flex-direction: column;
+    align-items: stretch;
+
+    .tk__search { min-width: 0; }
+    .tk__select { width: 100%; }
+  }
+
+  .tk__header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
 </style>

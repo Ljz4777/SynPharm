@@ -9,7 +9,7 @@
         :class="{ 'dv__tab--active': active === item.key }"
         @click="active = item.key"
       >
-        {{ item.icon }} {{ item.label }}
+        {{ item.label }}
       </button>
       <span class="dv__spacer" />
       <span class="dv__note">{{ activeNote }}</span>
@@ -51,9 +51,9 @@ const props = defineProps<{
 
 type SubTab = 'molecule' | 'round'
 
-const SUB_TABS: Array<{ key: SubTab; icon: string; label: string }> = [
-  { key: 'molecule', icon: '🧬', label: '分子对比' },
-  { key: 'round', icon: '📈', label: '轮次对比' }
+const SUB_TABS: Array<{ key: SubTab; label: string }> = [
+  { key: 'molecule', label: '分子对比' },
+  { key: 'round', label: '轮次对比' }
 ]
 
 const active = ref<SubTab>('molecule')
@@ -104,8 +104,8 @@ const activeNote = computed(() => {
   }
 
   &--active {
-    background: $color-brand-soft;
-    color: $color-brand-strong;
+    background: $app-brand-soft;
+    color: $app-brand;
     font-weight: $font-weight-medium;
   }
 }
