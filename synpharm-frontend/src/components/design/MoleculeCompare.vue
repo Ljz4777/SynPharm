@@ -350,8 +350,8 @@ defineExpose({
   width: 18px;
   height: 18px;
   border-radius: 4px;
-  background: $color-brand-soft;
-  color: $color-brand-strong;
+  background: $app-brand-soft;
+  color: $app-brand;
   font-size: 11px;
   font-weight: $font-weight-semibold;
 }
@@ -423,7 +423,7 @@ defineExpose({
   width: 18px;
   height: 18px;
   border-radius: 4px;
-  background: $color-brand;
+  background: $app-accent;
   color: #fff;
   font-size: 11px;
   font-weight: $font-weight-semibold;
@@ -437,8 +437,8 @@ defineExpose({
 .mc__panel-origin {
   padding: 0 5px;
   border-radius: 3px;
-  background: $color-brand-soft;
-  color: $color-brand-strong;
+  background: $app-brand-soft;
+  color: $app-brand;
   font-size: 10px;
 }
 

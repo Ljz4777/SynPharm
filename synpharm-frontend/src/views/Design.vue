@@ -10,7 +10,15 @@
         <template v-else>
           <div class="ide__pane-title">项目</div>
           <div class="ide__project">
-            <span class="ide__project-icon">🧬</span>
+            <svg class="ide__project-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path
+                d="M12 3l7.5 4.33v8.66L12 20.32 4.5 16.5V7.83L12 3z"
+                stroke="currentColor"
+                stroke-width="1.6"
+                fill="rgba(8, 145, 178, 0.08)"
+              />
+              <circle cx="12" cy="12" r="2" fill="currentColor" />
+            </svg>
             <div class="ide__project-info">
               <span class="ide__project-name">{{ store.project?.name ?? '—' }}</span>
               <span class="ide__project-meta">
@@ -84,8 +92,7 @@
             :class="{ 'ide__tab--active': store.activeTab === tab.key }"
             @click="store.setTab(tab.key)"
           >
-            <span class="ide__tab-icon">{{ tab.icon }}</span>
-            <span>{{ tab.label }}</span>
+            {{ tab.label }}
           </button>
 
           <div class="ide__tabs-spacer" />
@@ -156,32 +163,15 @@
             <PocketView />
           </div>
         </div>
-
-        <div class="ide__statusbar">
-          <span class="ide__status-item">
-            <span class="ide__status-dot" :class="editorReady ? 'ide__status-dot--ok' : 'ide__status-dot--idle'" />
-            {{ editorStateText }}
-          </span>
-          <span class="ide__status-item">
-            当前轮次 <b>{{ store.currentRound?.name ?? '—' }}</b>
-            · {{ store.currentRoundCandidateCount }} 个候选
-          </span>
-          <span class="ide__status-item">
-            选中 <b>{{ store.selectedCandidate?.displayName ?? '—' }}</b>
-          </span>
-          <span v-if="store.engineVerifiedCount" class="ide__status-item">
-            本页 {{ store.engineVerifiedCount }}/{{ store.candidates.length }} 已引擎校验
-          </span>
-          <span class="ide__status-spacer" />
-          <span v-if="store.degraded" class="ide__status-item ide__status-item--warn">
-            ⚠ 部分计算引擎未启用，相关指标已跳过
-          </span>
-          <span class="ide__status-item">{{ dataSourceLabel }}</span>
-        </div>
       </main>
 
       <!-- ==================== 右栏：约束与指标 ==================== -->
       <aside class="ide__right">
+        <header class="ide__right-head">
+          <h2 class="ide__right-title">设计约束</h2>
+          <p class="ide__right-subtitle">候选结构的规则与计算指标</p>
+        </header>
+
         <!-- 选中分子摘要：让「估算 → 引擎实算」的差别可见 -->
         <div v-if="store.selectedCandidate" class="ide__mol">
           <div class="ide__mol-head">
@@ -210,8 +200,24 @@
           </div>
         </div>
 
+        <!-- 规则状态汇总 -->
+        <div class="ide__pane-title">规则状态</div>
+        <div class="ide__rulesummary">
+          <div class="ide__rulesummary-row">
+            <span class="ide__rulesummary-dot" :class="ruleStatus.hardTone && `ide__rulesummary-dot--${ruleStatus.hardTone}`" />
+            <span class="ide__rulesummary-label">硬规则</span>
+            <span class="ide__rulesummary-value">{{ ruleStatus.hard }}</span>
+          </div>
+          <div class="ide__rulesummary-row">
+            <span class="ide__rulesummary-dot" :class="ruleStatus.softTone && `ide__rulesummary-dot--${ruleStatus.softTone}`" />
+            <span class="ide__rulesummary-label">软规则</span>
+            <span class="ide__rulesummary-value">{{ ruleStatus.soft }}</span>
+          </div>
+        </div>
+
+        <!-- 逐条约束判定 -->
         <div class="ide__pane-title">
-          设计约束
+          约束判定
           <span v-if="store.violations.length" class="ide__pane-badge">
             {{ store.hardViolationCount }} 硬 / {{ store.softViolationCount }} 软 违规
           </span>
@@ -234,6 +240,7 @@
           </p>
         </div>
 
+        <!-- 评估指标 -->
         <div class="ide__pane-title">
           评估指标
           <span v-if="store.metrics" class="ide__pane-badge ide__pane-badge--score">
@@ -248,7 +255,7 @@
             class="ide__metric"
             :class="{ 'ide__metric--off': !row.definition.enabled }"
           >
-            <span class="ide__check-label" :title="row.definition.metricCode">
+            <span class="ide__metric-label" :title="row.definition.metricCode">
               {{ row.definition.metricName }}
             </span>
             <span class="ide__metric-value" :class="metricToneClass(row.grade)">
@@ -265,33 +272,29 @@
       </aside>
     </div>
 
-    <!-- ==================== 底部：时间线 ==================== -->
-    <footer class="ide__timeline">
-      <span class="ide__timeline-title">时间线</span>
-      <div class="ide__timeline-track">
-        <button
-          v-for="round in store.rounds"
-          :key="round.id"
-          type="button"
-          class="ide__timeline-node"
-          :class="{
-            'ide__timeline-node--active': round.id === store.query.roundId,
-            'ide__timeline-node--closed': round.status === 'CLOSED'
-          }"
-          :title="round.name"
-          @click="store.setRound(round.id)"
-        >
-          R{{ round.roundNo }}
-        </button>
-      </div>
-      <span class="ide__timeline-gap" />
-      <span v-if="store.currentRound?.metricSnapshot" class="ide__timeline-stats">
+    <!-- ==================== 底部：状态栏 ==================== -->
+    <footer class="ide__statusbar">
+      <span class="ide__status-item">
+        <span class="ide__status-dot" :class="editorReady ? 'ide__status-dot--ok' : 'ide__status-dot--idle'" />
+        {{ editorStateText }}
+      </span>
+      <span class="ide__status-item">
+        当前轮次 <b>{{ store.currentRound?.name ?? '—' }}</b>
+      </span>
+      <span class="ide__status-item">{{ store.currentRoundCandidateCount }} 个候选</span>
+      <span class="ide__status-item" :class="{ 'ide__status-item--warn': store.degraded }">
+        {{ engineStateText }}
+      </span>
+
+      <span class="ide__status-spacer" />
+
+      <span v-if="store.currentRound?.metricSnapshot" class="ide__status-item ide__status-item--faint">
         通过率 {{ store.currentRound.metricSnapshot.passRate }}% ·
-        均值：综合 {{ store.currentRound.metricSnapshot.compositeScore }} ·
+        综合 {{ store.currentRound.metricSnapshot.compositeScore }} ·
         QED {{ store.currentRound.metricSnapshot.qed }} ·
         SA {{ store.currentRound.metricSnapshot.saScore }}
       </span>
-      <span v-else class="ide__timeline-note">谱系树 / 操作日志待实现</span>
+      <span class="ide__status-item ide__status-item--faint">{{ dataSourceLabel }}</span>
     </footer>
 
     <!-- 全局错误条 -->
@@ -328,11 +331,11 @@ const editorReady = ref(false)
 const editorErrorText = ref('')
 const saving = ref(false)
 
-const TABS: Array<{ key: WorkbenchTab; icon: string; label: string }> = [
-  { key: 'canvas', icon: '✏️', label: '画布' },
-  { key: 'candidates', icon: '🧫', label: '候选' },
-  { key: 'diff', icon: '🔀', label: '对比' },
-  { key: 'pocket', icon: '🧊', label: '口袋' }
+const TABS: Array<{ key: WorkbenchTab; label: string }> = [
+  { key: 'canvas', label: '画布' },
+  { key: 'candidates', label: '候选' },
+  { key: 'diff', label: '对比' },
+  { key: 'pocket', label: '口袋' }
 ]
 
 /* ------------------------------- 文案映射 ------------------------------- */
@@ -387,8 +390,34 @@ const dataSourceLabel = computed(() =>
   isDesignMockEnabled ? '数据来源：内置演示数据' : '数据来源：后端接口'
 )
 
+/** 底部状态栏引擎状态：降级时提示，否则显示可用 */
+const engineStateText = computed(() => (store.degraded ? '部分引擎未启用' : '引擎校验：可用'))
+
 /** 选中分子的数据是否已由化学引擎实算（決定右上角角标显示「引擎实算」还是「估算」） */
 const engineVerified = computed(() => store.selectedCandidate?.inchikeySource === 'ENGINE')
+
+/** 规则状态汇总：硬/软规则通过数 / 总数（未选中候选时显示 —） */
+const ruleStatus = computed(() => {
+  const hasSelection = !!store.selectedCandidate
+  const hardTotal = store.constraintRules.filter((r) => r.severity === 'HARD').length
+  const softTotal = store.constraintRules.filter((r) => r.severity === 'SOFT').length
+  const hardPassed = store.violations.filter((v) => v.severity === 'HARD' && v.passed).length
+  const softPassed = store.violations.filter((v) => v.severity === 'SOFT' && v.passed).length
+
+  const tone = (passed: number, total: number): string => {
+    if (!hasSelection) return ''
+    if (passed === total) return 'ok'
+    if (passed === 0) return 'bad'
+    return 'warn'
+  }
+
+  return {
+    hard: hasSelection ? `${hardPassed} / ${hardTotal}` : '—',
+    soft: hasSelection ? `${softPassed} / ${softTotal}` : '—',
+    hardTone: tone(hardPassed, hardTotal),
+    softTone: tone(softPassed, softTotal)
+  }
+})
 
 /** 指标展示格式：数值型按单位决定小数位，布尔/文本型直接展示文本 */
 function formatMetricValue(row: {
@@ -501,7 +530,7 @@ onBeforeUnmount(() => {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 244px minmax(0, 1fr) 276px;
+  grid-template-columns: 240px minmax(0, 1fr) 280px;
 }
 
 /* ---------------- 通用面板 ---------------- */
@@ -544,7 +573,7 @@ onBeforeUnmount(() => {
 
 .ide__pane-badge {
   margin-left: auto;
-  padding: 0 5px;
+  padding: 0 6px;
   border-radius: $radius-pill;
   background: $color-surface-sunken;
   font-size: 10px;
@@ -554,15 +583,14 @@ onBeforeUnmount(() => {
   color: $color-text-soft;
 
   &--score {
-    background: $color-brand-soft;
-    color: $color-brand-strong;
+    background: $app-brand-soft;
+    color: $app-brand;
   }
 }
 
 .ide__list {
   display: flex;
   flex-direction: column;
-  gap: 2px;
 }
 
 .ide__hint {
@@ -590,13 +618,16 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: $spacing-sm;
-  padding: $spacing-sm;
+  padding: $spacing-xs $spacing-sm;
   border-radius: $radius-control;
   background: $color-surface-alt;
 }
 
 .ide__project-icon {
-  font-size: 18px;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  color: $app-accent;
 }
 
 .ide__project-info {
@@ -623,7 +654,12 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: $spacing-sm;
-  padding: 4px $spacing-sm;
+  padding: 5px $spacing-sm;
+  border-bottom: 1px solid $color-border-soft;
+
+  &:last-child {
+    border-bottom: none;
+  }
 }
 
 .ide__role {
@@ -634,8 +670,8 @@ onBeforeUnmount(() => {
   font-weight: $font-weight-medium;
 
   &--wild_type {
-    background: rgba($accent-color, 0.14);
-    color: $color-brand-strong;
+    background: $app-accent-soft;
+    color: $app-accent-strong;
   }
 
   &--mutant {
@@ -668,8 +704,9 @@ onBeforeUnmount(() => {
 
 .ide__constraint {
   padding: $spacing-sm;
+  border: 1px solid $color-border-soft;
   border-radius: $radius-control;
-  background: $color-surface-alt;
+  background: $color-surface;
 }
 
 .ide__constraint-head {
@@ -718,7 +755,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: $spacing-sm;
-  padding: 5px $spacing-sm;
+  padding: 6px $spacing-sm;
   border: none;
   border-radius: $radius-control;
   background: transparent;
@@ -732,9 +769,10 @@ onBeforeUnmount(() => {
     background: $color-surface-alt;
   }
 
+  // 当前选中：轻浅青底（而非高饱和蓝块）
   &--active {
-    background: $color-brand-soft;
-    color: $color-brand-strong;
+    background: $app-brand-soft;
+    color: $app-brand;
     font-weight: $font-weight-medium;
   }
 }
@@ -752,7 +790,7 @@ onBeforeUnmount(() => {
   &--editing,
   &--generating,
   &--evaluating {
-    background: $accent-color;
+    background: $app-accent;
   }
 
   &--reviewing {
@@ -803,39 +841,50 @@ onBeforeUnmount(() => {
 
 .ide__tabs {
   display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: $spacing-sm $spacing-md;
+  align-items: stretch;
+  gap: $spacing-xs;
+  padding: 0 $spacing-md;
   border-bottom: 1px solid $color-border;
   background: $color-surface;
+  height: 46px;
 }
 
 .ide__tab {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px $spacing-sm;
+  padding: 0 $spacing-xs;
   border: none;
-  border-radius: $radius-control;
   background: transparent;
   font-size: $font-size-sm;
   color: $color-text-soft;
   cursor: pointer;
-  transition: background $transition-fast;
+  transition: color $transition-fast;
 
   &:hover {
-    background: $color-surface-alt;
+    color: $color-text;
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    left: $spacing-xs;
+    right: $spacing-xs;
+    bottom: -1px;
+    height: 2px;
+    border-radius: $radius-pill;
+    background: transparent;
+    transition: background $transition-fast;
   }
 
   &--active {
-    background: $color-brand-soft;
-    color: $color-brand-strong;
+    color: $app-brand;
     font-weight: $font-weight-medium;
-  }
-}
 
-.ide__tab-icon {
-  font-size: 12px;
+    &::after {
+      background: $app-accent;
+    }
+  }
 }
 
 .ide__tabs-spacer {
@@ -843,7 +892,8 @@ onBeforeUnmount(() => {
 }
 
 .ide__action {
-  padding: 5px $spacing-sm;
+  align-self: center;
+  padding: 5px $spacing-md;
   border: 1px solid $color-border;
   border-radius: $radius-control;
   background: $color-surface;
@@ -853,8 +903,8 @@ onBeforeUnmount(() => {
   transition: all $transition-fast;
 
   &:hover:not(:disabled) {
-    border-color: $color-brand;
-    color: $color-brand-strong;
+    border-color: $app-accent;
+    color: $app-accent-strong;
   }
 
   &:disabled {
@@ -866,10 +916,16 @@ onBeforeUnmount(() => {
     margin-left: $spacing-sm;
   }
 
+  // 主操作：青底白字，层级明确
   &--primary:not(:disabled) {
-    border-color: $color-brand;
-    background: $color-brand-soft;
-    color: $color-brand-strong;
+    border-color: $app-accent;
+    background: $app-accent;
+    color: #fff;
+
+    &:hover {
+      background: $app-accent-strong;
+      border-color: $app-accent-strong;
+    }
   }
 }
 
@@ -885,40 +941,28 @@ onBeforeUnmount(() => {
   inset: 0;
 }
 
-.ide__placeholder {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: $spacing-sm;
+/* 右栏头部 */
+.ide__right-head {
+  padding-bottom: $spacing-sm;
+  border-bottom: 1px solid $color-border;
 }
 
-.ide__placeholder-icon {
-  font-size: 32px;
-  opacity: 0.5;
-}
-
-.ide__placeholder-title {
+.ide__right-title {
   font-size: $font-size-lg;
-  font-weight: $font-weight-medium;
-  color: $color-text-soft;
+  font-weight: $font-weight-semibold;
+  color: $color-text;
 }
 
-.ide__placeholder-desc {
-  max-width: 460px;
-  font-size: $font-size-sm;
+.ide__right-subtitle {
+  margin-top: 2px;
+  font-size: $font-size-xs;
   color: $color-text-faint;
-  text-align: center;
-  line-height: 1.7;
 }
 
 /* 右栏：选中分子摘要（引擎真值来源可见） */
 .ide__mol {
-  margin: $spacing-sm $spacing-md 0;
   padding: $spacing-sm $spacing-md;
-  border: 1px solid $color-border;
+  border: 1px solid $color-border-soft;
   border-radius: $radius-control;
   background: $color-surface-alt;
 }
@@ -951,7 +995,7 @@ onBeforeUnmount(() => {
 }
 
 .ide__mol-badge--engine {
-  background: rgba(16, 185, 129, 0.14);
+  background: $app-success-soft;
   color: $success-color;
 }
 
@@ -980,15 +1024,70 @@ onBeforeUnmount(() => {
   font-size: 11px;
 }
 
+/* 规则状态汇总 */
+.ide__rulesummary {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid $color-border-soft;
+  border-radius: $radius-control;
+  padding: $spacing-xs $spacing-sm;
+}
+
+.ide__rulesummary-row {
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+  padding: 5px 0;
+
+  & + & {
+    border-top: 1px solid $color-border-soft;
+  }
+}
+
+.ide__rulesummary-dot {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: $text-light;
+
+  &--ok {
+    background: $success-color;
+  }
+
+  &--warn {
+    background: $warning-color;
+  }
+
+  &--bad {
+    background: $error-color;
+  }
+}
+
+.ide__rulesummary-label {
+  flex: 1;
+  font-size: 12px;
+  color: $color-text-soft;
+}
+
+.ide__rulesummary-value {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: $color-text;
+}
+
+/* 底部状态栏（合并原状态栏 + 时间线，单条 32px） */
 .ide__statusbar {
   display: flex;
   align-items: center;
   gap: $spacing-md;
-  padding: 5px $spacing-md;
+  height: 32px;
+  padding: 0 $spacing-md;
   border-top: 1px solid $color-border;
   background: $color-surface;
   font-size: 11px;
   color: $color-text-soft;
+  flex-shrink: 0;
 }
 
 .ide__status-item {
@@ -1006,6 +1105,10 @@ onBeforeUnmount(() => {
 
   &--warn {
     color: $warning-color;
+  }
+
+  &--faint {
+    color: $color-text-faint;
   }
 }
 
@@ -1027,14 +1130,19 @@ onBeforeUnmount(() => {
   }
 }
 
-/* ---------------- 右栏 ---------------- */
+/* ---------------- 右栏：约束判定 / 指标 ---------------- */
 .ide__check {
   display: flex;
   align-items: center;
   gap: $spacing-sm;
-  padding: 3px $spacing-sm;
+  padding: 6px $spacing-sm;
+  border-bottom: 1px solid $color-border-soft;
   font-size: 12px;
   color: $color-text-soft;
+
+  &:last-child {
+    border-bottom: none;
+  }
 }
 
 .ide__check-dot {
@@ -1075,26 +1183,39 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: $spacing-sm;
-  padding: 3px $spacing-sm;
+  padding: 6px $spacing-sm;
+  border-bottom: 1px solid $color-border-soft;
   font-size: 12px;
   color: $color-text-soft;
+
+  &:last-child {
+    border-bottom: none;
+  }
 
   &--off {
     opacity: 0.5;
   }
 }
 
+.ide__metric-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .ide__metric-value {
   font-size: 11px;
   font-variant-numeric: tabular-nums;
-  color: $color-text-faint;
+  color: $color-text;
 
   &--good {
     color: $success-color;
   }
 
   &--ok {
-    color: $color-brand-strong;
+    color: $app-brand;
   }
 
   &--fair {
@@ -1106,78 +1227,11 @@ onBeforeUnmount(() => {
   }
 }
 
-/* ---------------- 底部时间线 ---------------- */
-.ide__timeline {
-  display: flex;
-  align-items: center;
-  gap: $spacing-md;
-  height: 42px;
-  padding: 0 $spacing-md;
-  border-top: 1px solid $color-border;
-  background: $color-surface;
-}
-
-.ide__timeline-title {
-  font-size: $font-size-xs;
-  font-weight: $font-weight-semibold;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: $color-text-faint;
-}
-
-.ide__timeline-track {
-  display: flex;
-  align-items: center;
-  gap: $spacing-sm;
-}
-
-.ide__timeline-node {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border: none;
-  border-radius: 50%;
-  background: $color-surface-sunken;
-  font-size: 11px;
-  font-weight: $font-weight-medium;
-  color: $color-text-faint;
-  cursor: pointer;
-  transition: all $transition-fast;
-
-  &:hover {
-    background: $color-brand-soft;
-    color: $color-brand-strong;
-  }
-
-  &--closed {
-    background: rgba($success-color, 0.16);
-    color: $success-color;
-  }
-
-  &--active {
-    background: $color-brand;
-    color: #fff;
-  }
-}
-
-.ide__timeline-gap {
-  flex: 1;
-}
-
-.ide__timeline-stats,
-.ide__timeline-note {
-  font-size: 11px;
-  color: $color-text-faint;
-  font-variant-numeric: tabular-nums;
-}
-
 /* ---------------- 错误条 ---------------- */
 .ide__error {
   position: fixed;
   right: $spacing-lg;
-  bottom: 56px;
+  bottom: 40px;
   z-index: $z-toast;
   max-width: 420px;
   padding: $spacing-sm $spacing-md;

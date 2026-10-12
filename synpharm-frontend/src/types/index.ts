@@ -26,6 +26,8 @@ export interface InputData {
 
 export interface PredictionResult {
   id: string | number
+  /** 算法类型（dti/ppi/ddi）；后端从 predictionData 提取，旧数据可能为空 */
+  algoType?: string
   targetId: string
   targetName: string
   ligandSmiles: string

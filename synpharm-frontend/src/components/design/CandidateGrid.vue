@@ -39,7 +39,15 @@
       </div>
 
       <div v-else-if="!rows.length" class="cg__state cg__state--empty">
-        <span class="cg__state-icon">🧫</span>
+        <svg class="cg__state-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path
+            d="M12 3l7.5 4.33v8.66L12 20.32 4.5 16.5V7.83L12 3z"
+            stroke="currentColor"
+            stroke-width="1.5"
+            fill="none"
+          />
+          <circle cx="12" cy="12" r="2" fill="currentColor" />
+        </svg>
         <span class="cg__state-title">当前条件下没有候选分子</span>
         <span class="cg__state-desc">换一个轮次或放宽筛选条件，也可以先生成一批候选。</span>
       </div>
@@ -240,7 +248,7 @@ function changePageSize(): void {
 
   &:focus {
     outline: none;
-    border-color: $color-brand;
+    border-color: $app-accent;
   }
 }
 
@@ -289,8 +297,10 @@ function changePageSize(): void {
 }
 
 .cg__state-icon {
-  font-size: 30px;
-  opacity: 0.5;
+  width: 30px;
+  height: 30px;
+  color: $color-text-faint;
+  opacity: 0.7;
 }
 
 .cg__state-title {
@@ -334,12 +344,12 @@ function changePageSize(): void {
     user-select: none;
 
     &:hover {
-      color: $color-brand-strong;
+      color: $app-brand;
     }
   }
 
   &--sorted {
-    color: $color-brand-strong;
+    color: $app-brand;
   }
 
   &--idx {
@@ -365,7 +375,7 @@ function changePageSize(): void {
   }
 
   &--active {
-    background: $color-brand-soft;
+    background: $app-brand-soft;
   }
 }
 
@@ -409,8 +419,8 @@ function changePageSize(): void {
   margin-left: 6px;
   padding: 0 4px;
   border-radius: 3px;
-  background: $color-brand-soft;
-  color: $color-brand-strong;
+  background: $app-brand-soft;
+  color: $app-brand;
   font-size: 10px;
 }
 
@@ -426,8 +436,8 @@ function changePageSize(): void {
   }
 
   &--ok {
-    background: rgba($accent-color, 0.14);
-    color: $color-brand-strong;
+    background: rgba($app-accent, 0.14);
+    color: $app-brand;
   }
 
   &--idle {
@@ -465,8 +475,8 @@ function changePageSize(): void {
   cursor: pointer;
 
   &:hover:not(:disabled) {
-    border-color: $color-brand;
-    color: $color-brand-strong;
+    border-color: $app-accent;
+    color: $app-brand;
   }
 
   &:disabled {

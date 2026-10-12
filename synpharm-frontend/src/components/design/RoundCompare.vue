@@ -245,7 +245,7 @@ function buildOption(): echarts.EChartsOption {
       }
     ],
     series: [
-      { ...seriesOf('compositeScore', '综合得分', '#3b82f6'), yAxisIndex: 0 },
+      { ...seriesOf('compositeScore', '综合得分', '#0891b2'), yAxisIndex: 0 },
       { ...seriesOf('passRate', '通过率 %', '#10b981'), yAxisIndex: 0 },
       { ...seriesOf('qed', 'QED', '#f59e0b'), yAxisIndex: 1 },
       { ...seriesOf('saScore', 'SA Score', '#ef4444'), yAxisIndex: 1 }
@@ -459,7 +459,7 @@ onBeforeUnmount(() => {
 .rc__flow-num {
   font-size: $font-size-xl;
   font-weight: $font-weight-semibold;
-  color: $color-brand-strong;
+  color: $app-brand;
   font-variant-numeric: tabular-nums;
 
   &--dim {
@@ -485,7 +485,7 @@ onBeforeUnmount(() => {
 }
 
 .rc__flow-line {
-  color: $color-brand;
+  color: $app-accent;
   letter-spacing: -2px;
 }
 

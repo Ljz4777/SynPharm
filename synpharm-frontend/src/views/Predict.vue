@@ -2,19 +2,15 @@
   <div class="pc">
     <Sidebar />
     <main class="pc__main">
-      <!-- 页头 -->
+      <!-- ==================== 页头 ==================== -->
       <header class="pc__header">
-        <div>
+        <div class="pc__header-main">
           <h1 class="pc__title">预测中心</h1>
-          <p class="pc__subtitle">药物 · 蛋白质 · 分子间相互作用智能预测</p>
-        </div>
-        <div class="pc__stats">
-          <span class="pc__stat"><b>2,500+</b><em>预测任务</em></span>
-          <span class="pc__stat"><b>98%</b><em>准确率</em></span>
+          <p class="pc__subtitle">药物-靶点 · 蛋白-蛋白 · 药物-药物 相互作用智能预测</p>
         </div>
       </header>
 
-      <!-- 模式切换 -->
+      <!-- ==================== 模式切换 ==================== -->
       <div class="pc__tabs">
         <button class="pc__tab" :class="{ 'pc__tab--active': mode === 'single' }" @click="mode = 'single'">单条预测</button>
         <button class="pc__tab" :class="{ 'pc__tab--active': mode === 'batch' }" @click="mode = 'batch'">批量预测</button>
@@ -24,6 +20,7 @@
       <!-- ===== 单条预测 ===== -->
       <section v-show="mode === 'single'" class="pc__panel">
         <div class="pc__card">
+          <!-- 预测类型选择 -->
           <div class="pc__types">
             <button
               v-for="type in predictionTypes"
@@ -32,22 +29,47 @@
               :class="{ 'pc__type--active': selectedType === type.value }"
               @click="selectedType = type.value"
             >
-              <span class="pc__type-icon">{{ type.icon }}</span>
-              <span class="pc__type-name">{{ type.label }}</span>
+              <span class="pc__type-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                  <template v-if="type.value === 'dti'">
+                    <path d="M12 3l6.5 3.75v7.5L12 18l-6.5-3.75v-7.5L12 3z" />
+                    <circle cx="12" cy="10.5" r="2.5" />
+                  </template>
+                  <template v-else-if="type.value === 'ppi'">
+                    <circle cx="9" cy="12" r="5.5" />
+                    <circle cx="15" cy="12" r="5.5" />
+                  </template>
+                  <template v-else>
+                    <rect x="3" y="9" width="8" height="6" rx="3" />
+                    <rect x="13" y="9" width="8" height="6" rx="3" />
+                  </template>
+                </svg>
+              </span>
+              <span class="pc__type-text">
+                <span class="pc__type-name">{{ type.label }}</span>
+                <span class="pc__type-desc">{{ type.description }}</span>
+              </span>
+              <span class="pc__type-check" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="m5 13 4 4L19 7" />
+                </svg>
+              </span>
             </button>
           </div>
 
           <p class="pc__form-subtitle">{{ getFormSubtitle() }}</p>
 
           <div v-if="prefilledTargetName" class="pc__target-tip">
-            🎯 已选择靶点：<b>{{ prefilledTargetName }}</b>
+            已选择靶点：<b>{{ prefilledTargetName }}</b>
           </div>
 
           <div class="pc__form">
             <div class="pc__input-block">
               <div class="pc__input-head">
                 <label class="pc__label">{{ getFirstInputLabel() }}</label>
-                <button v-if="firstInputValue" class="pc__clear" @click="clearFirstInput" title="清空">✕</button>
+                <button v-if="firstInputValue" class="pc__clear" @click="clearFirstInput" title="清空">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+                </button>
               </div>
               <input
                 v-model="firstInputValue"
@@ -59,7 +81,7 @@
               />
               <div class="pc__hint">
                 <span v-if="firstInputError" class="pc__err">{{ firstInputError }}</span>
-                <span v-else-if="firstInputValue" class="pc__ok">✓ 格式有效</span>
+                <span v-else-if="firstInputValue" class="pc__ok">格式有效</span>
               </div>
             </div>
 
@@ -68,7 +90,9 @@
             <div class="pc__input-block">
               <div class="pc__input-head">
                 <label class="pc__label">{{ getSecondInputLabel() }}</label>
-                <button v-if="secondInputValue" class="pc__clear" @click="clearSecondInput" title="清空">✕</button>
+                <button v-if="secondInputValue" class="pc__clear" @click="clearSecondInput" title="清空">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+                </button>
               </div>
               <input
                 v-model="secondInputValue"
@@ -80,14 +104,16 @@
               />
               <div class="pc__hint">
                 <span v-if="secondInputError" class="pc__err">{{ secondInputError }}</span>
-                <span v-else-if="secondInputValue" class="pc__ok">✓ 格式有效</span>
+                <span v-else-if="secondInputValue" class="pc__ok">格式有效</span>
               </div>
             </div>
           </div>
 
           <div class="pc__advanced">
             <button class="pc__advanced-toggle" @click="showAdvancedOptions = !showAdvancedOptions">
-              <span class="pc__chevron" :class="{ 'pc__chevron--open': showAdvancedOptions }">▾</span>
+              <span class="pc__chevron" :class="{ 'pc__chevron--open': showAdvancedOptions }">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6" /></svg>
+              </span>
               {{ showAdvancedOptions ? '收起' : '展开' }}高级选项
             </button>
             <div v-if="showAdvancedOptions" class="pc__advanced-body">
@@ -112,7 +138,7 @@
 
           <div class="pc__actions">
             <button class="pc__btn pc__btn--ghost" @click="handleDemoPredict">
-              <svg class="pc__btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M15 9l-6 6"></path><path d="M9 9l6 6"></path></svg>
+              <svg class="pc__btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" /><path d="m10 8 6 4-6 4V8z" /></svg>
               使用演示数据
             </button>
             <button class="pc__btn pc__btn--primary" :disabled="!isValidInput || isLoading" @click="handlePredict">
@@ -142,12 +168,19 @@
             <label class="pc__dropzone" :class="{ 'pc__dropzone--has': batchFile }">
               <input type="file" accept=".csv" class="pc__file" @change="handleBatchFileChange" />
               <template v-if="!batchFile">
-                <span class="pc__dropzone-icon">📄</span>
+                <svg class="pc__dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <path d="M14 2v6h6" />
+                </svg>
                 <span class="pc__dropzone-text">点击选择 CSV 文件</span>
                 <span class="pc__dropzone-sub">每行一个输入（SMILES / 序列）</span>
               </template>
               <template v-else>
-                <span class="pc__dropzone-icon">✅</span>
+                <svg class="pc__dropzone-icon pc__dropzone-icon--ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <path d="M14 2v6h6" />
+                  <path d="m9 15 2 2 4-4" />
+                </svg>
                 <span class="pc__dropzone-text">{{ batchFile.name }}</span>
                 <span class="pc__dropzone-sub">点击可重新选择</span>
               </template>
@@ -182,7 +215,8 @@
               class="pc__btn pc__btn--secondary pc__btn--block"
               @click="handleBatchDownload"
             >
-              ⬇ 下载结果
+              <svg class="pc__btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+              下载结果
             </button>
           </div>
         </div>
@@ -242,9 +276,7 @@
         </div>
       </section>
 
-      <!-- ===== 预测结果 ===== -->
-      <!-- 必须限定在"单条预测"页签内：此前只判 predictionResult，
-           切到批量/历史页签时结果面板仍会串出来（问题总账 G-06） -->
+      <!-- ===== 预测结果（仅单条预测页签内） ===== -->
       <section v-if="mode === 'single' && predictionResult" class="pc__panel">
         <div class="pc__card">
           <div class="pc__result-head">
@@ -254,8 +286,6 @@
             </div>
             <div class="pc__result-badges">
               <span class="pc__badge">{{ predictionResult.datasetInfo.name }}</span>
-              <!-- 置信度阈值来自“高级选项”，低于阈值时明确提示，
-                   避免用户误以为该结果“达标”（问题总账 G-02） -->
               <span
                 v-if="belowConfidenceThreshold"
                 class="pc__badge pc__badge--warn"
@@ -309,7 +339,6 @@
             </div>
           </div>
 
-          <!-- detailedOutput 关闭时隐藏本区块，让“高级选项”真正生效（问题总账 G-02） -->
           <div v-if="detailedOutput" class="pc__section">
             <h4 class="pc__section-title">相互作用分析</h4>
             <div class="pc__interactions">
@@ -317,7 +346,7 @@
                 <span
                   class="pc__interaction-tag"
                   :style="{ background: getInteractionBgColor(it.type), color: getInteractionColor(it.type) }"
-                >{{ getInteractionIcon(it.type) }} {{ getInteractionTypeName(it.type) }}</span>
+                >{{ getInteractionTypeName(it.type) }}</span>
                 <span class="pc__interaction-meta">{{ it.residueName }} {{ it.residueNumber }} · {{ it.distance }} Å</span>
               </div>
             </div>
@@ -333,21 +362,20 @@
           </div>
 
           <div class="pc__result-actions">
-            <!-- 此前这个按钮没有任何 @click，点了完全没反应（问题总账 G-01） -->
             <button
               class="pc__btn pc__btn--secondary"
               :disabled="savingResult || savedResult || !predictionResult.id"
               :title="predictionResult.id ? '' : '该结果没有 ID，无法收藏'"
               @click="handleSaveResult"
             >
-              <svg class="pc__btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+              <svg class="pc__btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
               {{ savedResult ? '已保存' : (savingResult ? '保存中…' : '保存结果') }}
             </button>
-            <button class="predict__btn predict__btn--primary" @click="goToVisualization">
-              <svg class="predict__btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
-                <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
-                <line x1="12" y1="22.08" x2="12" y2="12"></line>
+            <button class="pc__btn pc__btn--primary" @click="goToVisualization">
+              <svg class="pc__btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                <line x1="12" y1="22.08" x2="12" y2="12" />
               </svg>
               3D可视化
             </button>
@@ -426,20 +454,19 @@ const applyTargetFromQuery = () => {
 
 onMounted(applyTargetFromQuery)
 
-const predictionTypes: Array<{ value: 'ppi' | 'dti' | 'ddi', label: string, icon: string, description: string }> = [
-  { value: 'ppi', label: 'PPI预测', icon: '🔬', description: '蛋白质-蛋白质相互作用' },
-  { value: 'dti', label: 'DTI预测', icon: '💊', description: '药物-靶点相互作用' },
-  { value: 'ddi', label: 'DDI预测', icon: '⚗️', description: '药物-药物相互作用' }
+/** 预测类型：图标在模板内用 SVG 区分，避免 emoji */
+const predictionTypes: Array<{ value: 'ppi' | 'dti' | 'ddi', label: string, description: string }> = [
+  { value: 'dti', label: 'DTI 预测', description: '药物-靶点相互作用' },
+  { value: 'ppi', label: 'PPI 预测', description: '蛋白质-蛋白质相互作用' },
+  { value: 'ddi', label: 'DDI 预测', description: '药物-药物相互作用' }
 ]
 
 const isValidInput = computed(() => {
-  return firstInputValue.value.trim() !== '' && secondInputValue.value.trim() !== '' && 
+  return firstInputValue.value.trim() !== '' && secondInputValue.value.trim() !== '' &&
          !firstInputError.value && !secondInputError.value
 })
 
 const SMILES_REGEX = /^[A-Za-z0-9@+\-\[\]\(\)\{\}.=#$%&\/\\<>~`'*:;]+$/
-const PDB_REGEX = /^[0-9A-Za-z]{4}$/
-const UNIPROT_REGEX = /^[A-Z0-9]{6,10}$/
 
 const validateSMILES = (value: string): string => {
   if (!value) return ''
@@ -448,16 +475,17 @@ const validateSMILES = (value: string): string => {
   return ''
 }
 
-const validatePDB = (value: string): string => {
+/**
+ * 靶点 / 蛋白输入的宽松校验：后端 PredictionInputResolver 会自动嗅探
+ * 氨基酸序列 / UniProt ID / PDB 引用并转成序列，前端只需兜底格式，
+ * 不要用 6-10 位 UniProt 正则把真实蛋白序列误判为非法。
+ */
+const validateProteinInput = (value: string): string => {
   if (!value) return ''
-  if (!PDB_REGEX.test(value)) return 'PDB ID应为4位字母数字组合'
-  return ''
-}
-
-const validateUniProt = (value: string): string => {
-  if (!value) return ''
-  if (!UNIPROT_REGEX.test(value)) return 'UniProt ID格式无效'
-  return ''
+  const v = value.trim()
+  if (/^[A-Za-z]+$/.test(v)) return ''            // 氨基酸序列
+  if (/^[A-Za-z0-9]{4,10}$/.test(v)) return ''   // UniProt ID / PDB ID
+  return '请输入氨基酸序列，或合法的 UniProt ID / PDB ID'
 }
 
 const validateFirstInput = () => {
@@ -466,35 +494,17 @@ const validateFirstInput = () => {
   } else if (selectedType.value === 'ddi') {
     firstInputError.value = validateSMILES(firstInputValue.value)
   } else if (selectedType.value === 'ppi') {
-    if (selectedInputType.value === 'pdb') {
-      firstInputError.value = validatePDB(firstInputValue.value)
-    } else if (selectedInputType.value === 'uniprot') {
-      firstInputError.value = validateUniProt(firstInputValue.value)
-    } else {
-      firstInputError.value = ''
-    }
+    firstInputError.value = validateProteinInput(firstInputValue.value)
   }
 }
 
 const validateSecondInput = () => {
   if (selectedType.value === 'dti') {
-    if (selectedInputType.value === 'pdb') {
-      secondInputError.value = validatePDB(secondInputValue.value)
-    } else if (selectedInputType.value === 'uniprot') {
-      secondInputError.value = validateUniProt(secondInputValue.value)
-    } else {
-      secondInputError.value = ''
-    }
+    secondInputError.value = validateProteinInput(secondInputValue.value)
   } else if (selectedType.value === 'ddi') {
     secondInputError.value = validateSMILES(secondInputValue.value)
   } else if (selectedType.value === 'ppi') {
-    if (selectedInputType.value === 'pdb') {
-      secondInputError.value = validatePDB(secondInputValue.value)
-    } else if (selectedInputType.value === 'uniprot') {
-      secondInputError.value = validateUniProt(secondInputValue.value)
-    } else {
-      secondInputError.value = ''
-    }
+    secondInputError.value = validateProteinInput(secondInputValue.value)
   }
 }
 
@@ -521,16 +531,16 @@ const getFirstInputLabel = () => {
   const labels: Record<string, string> = {
     dti: '药物 (SMILES)',
     ddi: '药物 A (SMILES)',
-    ppi: `蛋白质 A (${selectedInputType.value === 'pdb' ? 'PDB ID' : 'UniProt ID'})`
+    ppi: '蛋白质 A（氨基酸序列）'
   }
   return labels[selectedType.value] || '输入A'
 }
 
 const getSecondInputLabel = () => {
   const labels: Record<string, string> = {
-    dti: `靶点 (${selectedInputType.value === 'pdb' ? 'PDB ID' : 'UniProt ID'})`,
+    dti: '靶点（UniProt ID / PDB）',
     ddi: '药物 B (SMILES)',
-    ppi: `蛋白质 B (${selectedInputType.value === 'pdb' ? 'PDB ID' : 'UniProt ID'})`
+    ppi: '蛋白质 B（氨基酸序列）'
   }
   return labels[selectedType.value] || '输入B'
 }
@@ -539,16 +549,16 @@ const getFirstInputPlaceholder = () => {
   const placeholders: Record<string, string> = {
     dti: '输入药物SMILES表达式，如: CC(=O)OC1=CC=CC=C1C(=O)O',
     ddi: '输入药物A的SMILES表达式',
-    ppi: selectedInputType.value === 'pdb' ? '输入PDB ID，如: 6M0J' : '输入UniProt ID，如: P0DTC2'
+    ppi: '输入蛋白质 A 的氨基酸序列（也支持 UniProt ID / PDB ID）'
   }
   return placeholders[selectedType.value] || ''
 }
 
 const getSecondInputPlaceholder = () => {
   const placeholders: Record<string, string> = {
-    dti: selectedInputType.value === 'pdb' ? '输入PDB ID，如: 6M0J' : '输入UniProt ID，如: P0DTC2',
+    dti: '输入靶点 UniProt ID 或 PDB ID（如 P0DTC2 / 6M0J）',
     ddi: '输入药物B的SMILES表达式',
-    ppi: selectedInputType.value === 'pdb' ? '输入PDB ID，如: 6LU7' : '输入UniProt ID，如: P05067'
+    ppi: '输入蛋白质 B 的氨基酸序列（也支持 UniProt ID / PDB ID）'
   }
   return placeholders[selectedType.value] || ''
 }
@@ -590,17 +600,6 @@ const getInteractionBgColor = (type: string): string => {
   return colors[type] || 'rgba(100, 116, 139, 0.1)'
 }
 
-const getInteractionIcon = (type: string): string => {
-  const icons: Record<string, string> = {
-    hydrogen_bond: 'H',
-    hydrophobic: '◉',
-    ionic: '⚡',
-    pi_pi: 'π',
-    metal: '⊕'
-  }
-  return icons[type] || '●'
-}
-
 const getInteractionTypeName = (type: string): string => {
   const types: Record<string, string> = {
     hydrogen_bond: '氢键',
@@ -614,11 +613,11 @@ const getInteractionTypeName = (type: string): string => {
 
 const formatTime = (dateStr: string): string => {
   const date = new Date(dateStr)
-  return date.toLocaleString('zh-CN', { 
-    month: 'short', 
-    day: 'numeric', 
-    hour: '2-digit', 
-    minute: '2-digit' 
+  return date.toLocaleString('zh-CN', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
   })
 }
 
@@ -635,25 +634,25 @@ const handleDemoPredict = async () => {
     firstInputValue.value = 'C(=O)(C(=O)O)NC(CCC(=O)O)C(=O)O'
     secondInputValue.value = 'P0DTC2'
   } else if (selectedType.value === 'ppi') {
-    firstInputValue.value = 'MGLGLGQ'
-    secondInputValue.value = 'MVHLTEK'
+    firstInputValue.value = 'MKTAYIAKQRQISFVKSHFSRQL'
+    secondInputValue.value = 'MSTAGKVIKCKAAVLW'
   } else {
     firstInputValue.value = 'CC(=O)OC1=CC=CC=C1C(=O)O'
     secondInputValue.value = 'C1CCCCC1'
   }
   firstInputError.value = ''
   secondInputError.value = ''
-  
+
   await handlePredict()
 }
 
 const handlePredict = async () => {
   if (!isValidInput.value) return
-  
+
   isLoading.value = true
   predictError.value = ''
   predictionResult.value = null
-  
+
   try {
     let response
     if (selectedType.value === 'dti') {
@@ -812,959 +811,64 @@ const goHistoryVisualization = (item: PredictResultResponse) => {
 </script>
 
 <style lang="scss" scoped>
-.predict {
-  display: flex;
-  min-height: 100vh;
-  background: $bg-secondary;
-}
-
-.predict__content {
-  flex: 1;
-  margin-left: $sidebar-width;
-  padding: $spacing-xl;
-}
-
-.predict__header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: $spacing-2xl;
-  padding: $spacing-xl;
-  background: linear-gradient(135deg, $primary-color 0%, $primary-light 100%);
-  border-radius: $border-radius-xl;
-  color: #ffffff;
-}
-
-.predict__header-left {
-  flex: 1;
-}
-
-.predict__title {
-  font-size: $font-size-2xl;
-  font-weight: 700;
-  margin-bottom: $spacing-xs;
-}
-
-.predict__subtitle {
-  font-size: $font-size-sm;
-  opacity: 0.8;
-}
-
-.predict__header-stats {
-  display: flex;
-  gap: $spacing-xl;
-}
-
-.predict__stat-item {
-  text-align: center;
-}
-
-.predict__stat-value {
-  display: block;
-  font-size: $font-size-xl;
-  font-weight: 700;
-}
-
-.predict__stat-label {
-  font-size: $font-size-xs;
-  opacity: 0.8;
-}
-
-.predict__type-selector {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: $spacing-lg;
-  margin-bottom: $spacing-2xl;
-}
-
-.predict__type-card {
-  display: flex;
-  align-items: center;
-  gap: $spacing-md;
-  background: $bg-primary;
-  padding: $spacing-lg;
-  border-radius: $border-radius-lg;
-  cursor: pointer;
-  border: 2px solid transparent;
-  transition: all $transition-normal;
-  
-  &:hover {
-    border-color: $border-color;
-    box-shadow: $shadow-md;
-    transform: translateY(-2px);
-  }
-  
-  &--active {
-    border-color: $primary-color;
-    background: rgba($primary-color, 0.03);
-    box-shadow: $shadow-md;
-  }
-}
-
-.predict__type-icon-wrapper {
-  width: 48px;
-  height: 48px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: $bg-secondary;
-  border-radius: $border-radius-md;
-  flex-shrink: 0;
-}
-
-.predict__type-icon {
-  font-size: 24px;
-}
-
-.predict__type-info {
-  flex: 1;
-}
-
-.predict__type-name {
-  display: block;
-  font-size: $font-size-base;
-  font-weight: 600;
-  color: $text-primary;
-  margin-bottom: 2px;
-}
-
-.predict__type-desc {
-  display: block;
-  font-size: $font-size-xs;
-  color: $text-muted;
-}
-
-.predict__type-arrow {
-  color: $text-muted;
-}
-
-.predict__check-icon {
-  width: 16px;
-  height: 16px;
-  color: $success-color;
-}
-
-.predict__form {
-  max-width: 800px;
-  margin: 0 auto $spacing-2xl;
-}
-
-.predict__form-card {
-  background: $bg-primary;
-  border-radius: $border-radius-xl;
-  padding: $spacing-2xl;
-  border: 1px solid $border-light;
-  box-shadow: $shadow-sm;
-}
-
-.predict__form-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: $spacing-2xl;
-  padding-bottom: $spacing-xl;
-  border-bottom: 1px solid $border-light;
-}
-
-.predict__form-header-left {
-  flex: 1;
-}
-
-.predict__form-title {
-  font-size: $font-size-xl;
-  font-weight: 600;
-  color: $text-primary;
-  margin-bottom: $spacing-xs;
-}
-
-.predict__form-subtitle {
-  font-size: $font-size-sm;
-  color: $text-muted;
-}
-
-.predict__demo-btn {
-  display: flex;
-  align-items: center;
-  gap: $spacing-xs;
-  padding: $spacing-sm $spacing-md;
-  background: rgba($info-color, 0.1);
-  color: $info-color;
-  border: none;
-  border-radius: $border-radius-md;
-  font-size: $font-size-sm;
-  cursor: pointer;
-  transition: all $transition-fast;
-  
-  &:hover {
-    background: rgba($info-color, 0.15);
-  }
-}
-
-.predict__demo-icon {
-  width: 14px;
-  height: 14px;
-}
-
-.predict__input-wrapper {
-  margin-bottom: $spacing-xl;
-}
-
-.predict__input-column {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  gap: $spacing-md;
-  align-items: start;
-}
-
-.predict__input-group {
-  &--single {
-    width: 100%;
-  }
-}
-
-.predict__input-group-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: $spacing-sm;
-}
-
-.predict__label {
-  font-size: $font-size-sm;
-  font-weight: 500;
-  color: $text-primary;
-}
-
-.predict__input-clear {
-  background: transparent;
-  border: none;
-  color: $text-muted;
-  cursor: pointer;
-  padding: 0;
-  
-  svg {
-    width: 14px;
-    height: 14px;
-  }
-  
-  &:hover {
-    color: $text-secondary;
-  }
-}
-
-.predict__input-type-group {
-  display: flex;
-  gap: $spacing-xs;
-}
-
-.predict__input-type-btn {
-  padding: $spacing-xs $spacing-sm;
-  border: 1px solid $border-color;
-  border-radius: $border-radius-sm;
-  background: $bg-secondary;
-  color: $text-secondary;
-  font-size: $font-size-xs;
-  cursor: pointer;
-  transition: all $transition-fast;
-  
-  &:hover {
-    background: $bg-tertiary;
-  }
-  
-  &--active {
-    background: $primary-color;
-    color: #ffffff;
-    border-color: $primary-color;
-  }
-}
-
-.predict__input {
-  width: 100%;
-  padding: $spacing-md;
-  border: 1.5px solid $border-color;
-  border-radius: $border-radius-md;
-  font-size: $font-size-base;
-  background: $bg-secondary;
-  transition: all $transition-fast;
-  
-  &:focus {
-    outline: none;
-    border-color: $primary-color;
-    box-shadow: 0 0 0 3px rgba($primary-color, 0.05);
-  }
-  
-  &--error {
-    border-color: $error-color;
-    
-    &:focus {
-      box-shadow: 0 0 0 3px rgba($error-color, 0.1);
-    }
-  }
-}
-
-.predict__input-error {
-  display: block;
-  font-size: $font-size-xs;
-  color: $error-color;
-  margin-top: $spacing-xs;
-}
-
-.predict__input-valid {
-  display: block;
-  font-size: $font-size-xs;
-  color: $success-color;
-  margin-top: $spacing-xs;
-}
-
-.predict__input-divider {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: $spacing-lg 0;
-}
-
-.predict__divider-text {
-  font-size: $font-size-xs;
-  font-weight: 600;
-  color: $text-muted;
-  padding: $spacing-xs $spacing-sm;
-  background: $bg-secondary;
-  border-radius: $border-radius-sm;
-}
-
-.predict__options {
-  margin-bottom: $spacing-xl;
-}
-
-.predict__options-toggle {
-  display: flex;
-  align-items: center;
-  gap: $spacing-xs;
-  background: transparent;
-  border: none;
-  color: $primary-color;
-  font-size: $font-size-sm;
-  cursor: pointer;
-  padding: $spacing-xs 0;
-}
-
-.predict__toggle-icon {
-  width: 14px;
-  height: 14px;
-  transition: transform $transition-fast;
-  
-  &--rotated {
-    transform: rotate(180deg);
-  }
-}
-
-.predict__advanced-options {
-  margin-top: $spacing-md;
-  padding: $spacing-xl;
-  background: $bg-secondary;
-  border-radius: $border-radius-lg;
-}
-
-.predict__advanced-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: $spacing-xl;
-}
-
-.predict__advanced-option {
-  &:last-child {
-    margin-bottom: 0;
-  }
-}
-
-.predict__advanced-option-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: $spacing-sm;
-}
-
-.predict__range-input {
-  width: 100%;
-  height: 6px;
-  border-radius: 3px;
-  background: $bg-tertiary;
-  appearance: none;
-  cursor: pointer;
-  
-  &::-webkit-slider-thumb {
-    appearance: none;
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    background: $primary-color;
-    cursor: pointer;
-    border: 3px solid #ffffff;
-    box-shadow: $shadow-sm;
-    transition: transform $transition-fast;
-    
-    &:hover {
-      transform: scale(1.1);
-    }
-  }
-}
-
-.predict__range-labels {
-  display: flex;
-  justify-content: space-between;
-  font-size: $font-size-xs;
-  color: $text-muted;
-  margin-top: $spacing-xs;
-}
-
-.predict__range-value {
-  font-size: $font-size-sm;
-  color: $text-primary;
-  font-weight: 600;
-  width: 50px;
-  text-align: right;
-}
-
-.predict__checkbox-wrapper {
-  display: flex;
-  align-items: center;
-  gap: $spacing-xs;
-  cursor: pointer;
-}
-
-.predict__checkbox {
-  display: none;
-}
-
-.predict__checkbox-custom {
-  width: 18px;
-  height: 18px;
-  border: 2px solid $border-color;
-  border-radius: $border-radius-sm;
-  position: relative;
-  transition: all $transition-fast;
-  
-  &::before {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%) rotate(-45deg);
-    width: 6px;
-    height: 10px;
-    border-left: 2px solid transparent;
-    border-bottom: 2px solid transparent;
-    transition: all $transition-fast;
-  }
-}
-
-.predict__checkbox:checked + .predict__checkbox-custom {
-  background: $primary-color;
-  border-color: $primary-color;
-  
-  &::before {
-    border-left-color: #ffffff;
-    border-bottom-color: #ffffff;
-  }
-}
-
-.predict__advanced-option-desc {
-  font-size: $font-size-xs;
-  color: $text-muted;
-}
-
-.predict__actions {
-  display: flex;
-  gap: $spacing-md;
-}
-
-.predict__error {
-  margin-top: $spacing-md;
-  padding: $spacing-sm $spacing-md;
-  border-radius: $border-radius-md;
-  background: rgba(239, 68, 68, 0.1);
-  color: $error-color;
-  font-size: $font-size-sm;
-  text-align: center;
-}
-
-.predict__batch {
-  margin-top: $spacing-xl;
-}
-
-.predict__batch-card {
-  background: $bg-primary;
-  border: 1px solid $border-light;
-  border-radius: $border-radius-xl;
-  padding: $spacing-xl;
-}
-
-.predict__batch-header {
-  margin-bottom: $spacing-lg;
-}
-
-.predict__batch-title {
-  font-size: $font-size-lg;
-  font-weight: 600;
-  color: $text-primary;
-  margin-bottom: $spacing-xs;
-}
-
-.predict__batch-subtitle {
-  font-size: $font-size-sm;
-  color: $text-muted;
-}
-
-.predict__batch-row {
-  display: flex;
-  gap: $spacing-md;
-  align-items: center;
-}
-
-.predict__batch-select {
-  padding: $spacing-sm $spacing-md;
-  border: 1px solid $border-color;
-  border-radius: $border-radius-md;
-  font-size: $font-size-base;
-  background: $bg-tertiary;
-}
-
-.predict__batch-file {
-  flex: 1;
-  padding: $spacing-sm;
-  font-size: $font-size-sm;
-}
-
-.predict__batch-status {
-  margin-top: $spacing-lg;
-  padding: $spacing-md;
-  background: $bg-tertiary;
-  border-radius: $border-radius-md;
-}
-
-.predict__batch-status-row {
-  display: flex;
-  justify-content: space-between;
-  font-size: $font-size-sm;
-  color: $text-secondary;
-  margin-bottom: $spacing-sm;
-}
-
-.predict__batch-progress-track {
-  width: 100%;
-  height: 8px;
-  background: $border-color;
-  border-radius: $border-radius-md;
-  overflow: hidden;
-  margin-bottom: $spacing-md;
-}
-
-.predict__batch-progress-fill {
-  height: 100%;
-  background: $primary-color;
-  border-radius: $border-radius-md;
-  transition: width 0.3s ease;
-}
-
-.predict__btn {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: $spacing-xs;
-  padding: $spacing-md;
-  border-radius: $border-radius-md;
-  font-size: $font-size-base;
-  font-weight: 500;
-  cursor: pointer;
-  border: none;
-  transition: all $transition-fast;
-  
-  &--primary {
-    background: $primary-color;
-    color: #ffffff;
-    
-    &:hover:not(:disabled) {
-      background: $primary-dark;
-      transform: translateY(-1px);
-      box-shadow: $shadow-md;
-    }
-    
-    &:disabled {
-      background: $border-color;
-      cursor: not-allowed;
-    }
-  }
-  
-  &--outline {
-    background: transparent;
-    color: $primary-color;
-    border: 1px solid $border-color;
-    
-    &:hover {
-      background: rgba($primary-color, 0.05);
-    }
-  }
-  
-  &--secondary {
-    background: $bg-secondary;
-    color: $text-primary;
-    
-    &:hover {
-      background: $bg-tertiary;
-    }
-  }
-}
-
-.predict__btn-icon {
-  width: 16px;
-  height: 16px;
-  
-  &--loading {
-    animation: spin 1s linear infinite;
-  }
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-.predict__loading-spinner {
-  stroke-dasharray: 283;
-  stroke-dashoffset: 70;
-  animation: spin 1s linear infinite;
-}
-
-.predict__result {
-  max-width: 900px;
-  margin: 0 auto;
-}
-
-.predict__result-card {
-  background: $bg-primary;
-  border-radius: $border-radius-xl;
-  padding: $spacing-2xl;
-  border: 1px solid $border-light;
-  box-shadow: $shadow-sm;
-}
-
-.predict__result-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: $spacing-xl;
-}
-
-.predict__result-header-right {
-  display: flex;
-  align-items: center;
-  gap: $spacing-md;
-}
-
-.predict__result-title {
-  font-size: $font-size-xl;
-  font-weight: 600;
-  color: $text-primary;
-}
-
-.predict__result-badge {
-  font-size: $font-size-xs;
-  font-weight: 500;
-  padding: 4px 12px;
-  border-radius: 100px;
-  background: rgba($info-color, 0.1);
-  color: $info-color;
-}
-
-.predict__result-time {
-  font-size: $font-size-xs;
-  color: $text-muted;
-}
-
-.predict__result-summary {
-  margin-bottom: $spacing-xl;
-}
-
-.predict__result-main {
-  display: grid;
-  grid-template-columns: 1fr 1.5fr;
-  gap: $spacing-xl;
-}
-
-.predict__result-score-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: $spacing-xl;
-  background: linear-gradient(135deg, $bg-secondary 0%, $bg-tertiary 100%);
-  border-radius: $border-radius-lg;
-}
-
-.predict__score-label {
-  font-size: $font-size-sm;
-  color: $text-muted;
-  margin-bottom: $spacing-md;
-}
-
-.predict__score-ring {
-  position: relative;
-  width: 140px;
-  height: 140px;
-  margin-bottom: $spacing-md;
-}
-
-.predict__score-ring-svg {
-  width: 100%;
-  height: 100%;
-}
-
-.predict__score-ring-bg {
-  stroke-width: 10;
-}
-
-.predict__score-ring-progress {
-  stroke-width: 10;
-  transition: stroke-dasharray 0.5s ease;
-}
-
-.predict__score-value {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 32px;
-  font-weight: 700;
-  color: $text-primary;
-}
-
-.predict__score-badge {
-  font-size: $font-size-xs;
-  font-weight: 500;
-  padding: 4px 12px;
-  border-radius: 100px;
-}
-
-.predict__result-details {
-  display: flex;
-  flex-direction: column;
-  gap: $spacing-md;
-}
-
-.predict__result-detail-item {
-  display: flex;
-  align-items: center;
-  gap: $spacing-md;
-  padding: $spacing-md;
-  background: $bg-secondary;
-  border-radius: $border-radius-md;
-  
-  &--highlight {
-    background: rgba($primary-color, 0.05);
-    border-left: 3px solid $primary-color;
-  }
-}
-
-.predict__detail-icon {
-  width: 20px;
-  height: 20px;
-  color: $text-muted;
-  flex-shrink: 0;
-}
-
-.predict__detail-content {
-  flex: 1;
-}
-
-.predict__detail-label {
-  display: block;
-  font-size: $font-size-xs;
-  color: $text-muted;
-  margin-bottom: 2px;
-}
-
-.predict__detail-value {
-  font-size: $font-size-base;
-  font-weight: 600;
-  color: $text-primary;
-  
-  &--highlight {
-    font-size: $font-size-lg;
-    color: $primary-color;
-  }
-}
-
-.predict__detail-unit {
-  font-size: $font-size-sm;
-  font-weight: 400;
-  color: $text-muted;
-}
-
-.predict__result-section {
-  margin-bottom: $spacing-xl;
-  padding-top: $spacing-xl;
-  border-top: 1px solid $border-light;
-  
-  &:first-of-type {
-    border-top: none;
-    padding-top: 0;
-  }
-}
-
-.predict__result-section-title {
-  font-size: $font-size-base;
-  font-weight: 600;
-  color: $text-primary;
-  margin-bottom: $spacing-lg;
-}
-
-.predict__interaction-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: $spacing-sm;
-}
-
-.predict__interaction-item {
-  display: flex;
-  align-items: center;
-  gap: $spacing-sm;
-  padding: $spacing-sm $spacing-md;
-  background: $bg-secondary;
-  border-radius: $border-radius-md;
-}
-
-.predict__interaction-type {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: $font-size-xs;
-  font-weight: 500;
-  padding: 4px 8px;
-  border-radius: $border-radius-sm;
-}
-
-.predict__interaction-icon {
-  font-size: 10px;
-}
-
-.predict__interaction-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.predict__interaction-residue {
-  font-size: $font-size-xs;
-  color: $text-primary;
-  font-weight: 500;
-}
-
-.predict__interaction-distance {
-  font-size: $font-size-xs;
-  color: $text-muted;
-}
-
-.predict__dataset-info {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: $spacing-md;
-}
-
-.predict__dataset-item {
-  padding: $spacing-md;
-  background: $bg-secondary;
-  border-radius: $border-radius-md;
-}
-
-.predict__dataset-label {
-  display: block;
-  font-size: $font-size-xs;
-  color: $text-muted;
-  margin-bottom: $spacing-xs;
-}
-
-.predict__dataset-value {
-  font-size: $font-size-sm;
-  font-weight: 600;
-  color: $text-primary;
-}
-
-.predict__result-actions {
-  display: flex;
-  gap: $spacing-md;
-  padding-top: $spacing-xl;
-  border-top: 1px solid $border-light;
-}
-</style>
-
-<style lang="scss" scoped>
-/* ===================== 预测中心（重构版） ===================== */
+/* ===================== 预测中心（深青品牌） ===================== */
 .pc {
   display: flex;
   min-height: 100vh;
-  background: $bg-secondary;
+  background: $color-canvas;
   padding-top: $header-height;
 }
 
-// 宽度与居中由 styles/base.scss 的全局规则统一提供
+// 宽度与居中由 styles/base.scss 的全局规则统一提供（1200px 窄幅）
 .pc__main {
   flex: 1;
-  padding: $spacing-xl;
+  padding: $spacing-lg $spacing-xl $spacing-2xl;
 }
 
 /* ---------- 页头 ---------- */
 .pc__header {
   display: flex;
+  align-items: flex-end;
   justify-content: space-between;
-  align-items: center;
   gap: $spacing-lg;
-  padding: $spacing-lg $spacing-xl;
-  background: $bg-primary;
-  border: 1px solid $border-color;
-  border-left: 4px solid $accent-color;
-  border-radius: $border-radius-lg;
-  box-shadow: $shadow-sm;
-  margin-bottom: $spacing-lg;
+  padding: $spacing-md 0 $spacing-xl;
+}
+
+.pc__header-main {
+  position: relative;
+  padding-left: $spacing-md;
+  min-width: 0;
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 5px;
+    bottom: 5px;
+    width: 3px;
+    border-radius: $radius-pill;
+    background: linear-gradient(180deg, $app-accent, $app-brand);
+  }
 }
 
 .pc__title {
   font-size: $font-size-xl;
-  font-weight: 700;
-  color: $text-primary;
+  font-weight: $font-weight-semibold;
+  line-height: 1.3;
+  color: $color-text;
 }
 
 .pc__subtitle {
-  margin-top: $spacing-xs;
+  margin-top: 4px;
   font-size: $font-size-sm;
-  color: $text-muted;
+  color: $color-text-faint;
 }
 
-.pc__stats {
-  display: flex;
-  gap: $spacing-lg;
-}
-
-.pc__stat {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  b {
-    font-size: $font-size-xl;
-    color: $primary-color;
-  }
-  em {
-    font-style: normal;
-    font-size: $font-size-xs;
-    color: $text-muted;
-  }
-}
-
-/* ---------- Tabs ---------- */
+/* ---------- 模式切换 Tabs ---------- */
 .pc__tabs {
   display: inline-flex;
-  background: $bg-tertiary;
-  border-radius: $border-radius-md;
+  background: $color-surface-sunken;
+  border-radius: $radius-control;
   padding: 4px;
   margin-bottom: $spacing-lg;
   gap: 4px;
@@ -1776,14 +880,14 @@ const goHistoryVisualization = (item: PredictResultResponse) => {
   background: transparent;
   border-radius: $border-radius-sm;
   font-size: $font-size-base;
-  color: $text-secondary;
+  color: $color-text-soft;
   cursor: pointer;
   transition: $transition-fast;
-  &:hover { color: $text-primary; }
+  &:hover { color: $color-text; }
   &--active {
-    background: $bg-primary;
-    color: $primary-color;
-    font-weight: 600;
+    background: $color-surface;
+    color: $app-brand;
+    font-weight: $font-weight-medium;
     box-shadow: $shadow-sm;
   }
 }
@@ -1794,11 +898,11 @@ const goHistoryVisualization = (item: PredictResultResponse) => {
 }
 
 .pc__card {
-  background: $bg-primary;
-  border: 1px solid $border-color;
-  border-radius: $border-radius-lg;
+  background: $color-surface;
+  border: 1px solid $color-border;
+  border-radius: $radius-card;
   padding: $spacing-xl;
-  box-shadow: $shadow-sm;
+  box-shadow: $shadow-card;
 }
 
 .pc__card-head {
@@ -1807,14 +911,14 @@ const goHistoryVisualization = (item: PredictResultResponse) => {
 
 .pc__card-title {
   font-size: $font-size-lg;
-  font-weight: 600;
-  color: $text-primary;
+  font-weight: $font-weight-semibold;
+  color: $color-text;
 }
 
 .pc__card-sub {
   margin-top: $spacing-xs;
   font-size: $font-size-sm;
-  color: $text-muted;
+  color: $color-text-faint;
 }
 
 /* ---------- 类型选择 ---------- */
@@ -1829,45 +933,99 @@ const goHistoryVisualization = (item: PredictResultResponse) => {
   align-items: center;
   gap: $spacing-sm;
   padding: $spacing-md;
-  border: 1px solid $border-color;
-  border-radius: $border-radius-md;
-  background: $bg-primary;
+  border: 1px solid $color-border;
+  border-radius: $radius-control;
+  background: $color-surface;
   cursor: pointer;
-  transition: $transition-normal;
-  color: $text-secondary;
-  &:hover { border-color: $accent-light; }
+  text-align: left;
+  transition: border-color $transition-fast, background $transition-fast, box-shadow $transition-fast;
+  color: $color-text-soft;
+
+  &:hover {
+    border-color: $app-accent;
+  }
+
   &--active {
-    border-color: $accent-color;
-    background: rgba(59, 130, 246, 0.06);
-    color: $accent-color;
-    box-shadow: 0 0 0 1px $accent-color;
+    border-color: $app-accent;
+    background: $app-accent-softer;
+    color: $app-brand;
+    box-shadow: 0 0 0 1px $app-accent;
+
+    .pc__type-name { color: $app-brand; }
+    .pc__type-icon { color: $app-accent; }
   }
 }
 
 .pc__type-icon {
-  font-size: $font-size-xl;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: $radius-control;
+  background: $color-surface-alt;
+  color: $color-text-faint;
+
+  svg { width: 22px; height: 22px; }
+}
+
+.pc__type-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
 }
 
 .pc__type-name {
-  font-weight: 600;
+  font-weight: $font-weight-semibold;
   font-size: $font-size-base;
+  color: $color-text;
+}
+
+.pc__type-desc {
+  font-size: $font-size-xs;
+  color: $color-text-faint;
+}
+
+.pc__type-check {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: $app-accent;
+  color: #fff;
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity $transition-fast, transform $transition-fast;
+
+  svg { width: 13px; height: 13px; }
+}
+
+.pc__type--active .pc__type-check {
+  opacity: 1;
+  transform: scale(1);
 }
 
 .pc__form-subtitle {
   margin: $spacing-lg 0 $spacing-md;
   font-size: $font-size-sm;
-  color: $text-muted;
+  color: $color-text-faint;
 }
 
 .pc__target-tip {
   margin: $spacing-md 0;
   padding: $spacing-sm $spacing-md;
-  background: rgba(59, 130, 246, 0.08);
-  border: 1px solid rgba(59, 130, 246, 0.2);
-  border-radius: $border-radius-md;
+  background: $app-accent-softer;
+  border: 1px solid rgba(8, 145, 178, 0.22);
+  border-radius: $radius-control;
   font-size: $font-size-sm;
-  color: $accent-color;
-  b { font-weight: 600; }
+  color: $app-accent-strong;
+  b { font-weight: $font-weight-semibold; }
 }
 
 /* ---------- 输入区 ---------- */
@@ -1892,36 +1050,44 @@ const goHistoryVisualization = (item: PredictResultResponse) => {
 
 .pc__label {
   font-size: $font-size-sm;
-  font-weight: 600;
-  color: $text-secondary;
+  font-weight: $font-weight-medium;
+  color: $color-text-soft;
 }
 
 .pc__clear {
   border: none;
   background: transparent;
-  color: $text-muted;
+  color: $color-text-faint;
   cursor: pointer;
-  font-size: $font-size-xs;
   padding: 2px 6px;
   border-radius: $border-radius-sm;
+  display: inline-flex;
+  align-items: center;
+
+  svg { width: 12px; height: 12px; }
+
   &:hover { color: $error-color; background: rgba(239, 68, 68, 0.08); }
 }
 
 .pc__input {
   width: 100%;
   padding: $spacing-md;
-  border: 1px solid $border-color;
-  border-radius: $border-radius-md;
+  border: 1px solid $color-border;
+  border-radius: $radius-control;
   font-size: $font-size-base;
-  color: $text-primary;
-  background: $bg-primary;
+  color: $color-text;
+  background: $color-surface;
   transition: $transition-fast;
+  font-family: inherit;
+
   &::placeholder { color: $text-light; }
+
   &:focus {
     outline: none;
-    border-color: $accent-color;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+    border-color: $app-accent;
+    box-shadow: 0 0 0 3px rgba(8, 145, 178, 0.12);
   }
+
   &--error {
     border-color: $error-color;
     &:focus { box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12); }
@@ -1934,13 +1100,14 @@ const goHistoryVisualization = (item: PredictResultResponse) => {
 }
 
 .pc__err { color: $error-color; }
-.pc__ok { color: $success-color; }
+.pc__ok { color: $app-success; }
 
 .pc__vs {
   display: flex;
   align-items: center;
   align-self: center;
   margin-top: 26px;
+
   span {
     display: flex;
     align-items: center;
@@ -1948,35 +1115,39 @@ const goHistoryVisualization = (item: PredictResultResponse) => {
     width: 40px;
     height: 40px;
     border-radius: 50%;
-    background: $bg-tertiary;
-    color: $text-muted;
+    background: $color-surface-sunken;
+    color: $color-text-faint;
     font-size: $font-size-sm;
-    font-weight: 700;
+    font-weight: $font-weight-bold;
   }
 }
 
 /* ---------- 高级选项 ---------- */
 .pc__advanced {
   margin-top: $spacing-lg;
-  border-top: 1px dashed $border-color;
+  border-top: 1px dashed $color-border;
   padding-top: $spacing-md;
 }
 
 .pc__advanced-toggle {
   border: none;
   background: transparent;
-  color: $text-secondary;
+  color: $color-text-soft;
   font-size: $font-size-sm;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   gap: $spacing-xs;
-  &:hover { color: $primary-color; }
+  padding: $spacing-xs 0;
+  &:hover { color: $app-brand; }
 }
 
 .pc__chevron {
-  display: inline-block;
-  transition: $transition-fast;
+  display: inline-flex;
+  transition: transform $transition-fast;
+
+  svg { width: 14px; height: 14px; }
+
   &--open { transform: rotate(180deg); }
 }
 
@@ -1986,14 +1157,15 @@ const goHistoryVisualization = (item: PredictResultResponse) => {
   gap: $spacing-lg;
   margin-top: $spacing-md;
   padding: $spacing-md;
-  background: $bg-tertiary;
-  border-radius: $border-radius-md;
+  background: $color-surface-sunken;
+  border-radius: $radius-control;
 }
 
 .pc__advanced-item {
   display: flex;
   flex-direction: column;
   gap: $spacing-sm;
+
   &--row {
     flex-direction: row;
     align-items: center;
@@ -2010,29 +1182,33 @@ const goHistoryVisualization = (item: PredictResultResponse) => {
 
 .pc__range {
   width: 100%;
-  accent-color: $accent-color;
+  accent-color: $app-accent;
 }
 
 .pc__range-val {
   font-size: $font-size-sm;
-  font-weight: 600;
-  color: $accent-color;
+  font-weight: $font-weight-semibold;
+  color: $app-accent;
 }
 
 .pc__checkbox {
   display: inline-flex;
+
   input { display: none; }
+
   .pc__checkbox-box {
     width: 18px;
     height: 18px;
-    border: 1px solid $border-color;
+    border: 1px solid $color-border;
     border-radius: 4px;
     position: relative;
     transition: $transition-fast;
   }
+
   input:checked + .pc__checkbox-box {
-    background: $accent-color;
-    border-color: $accent-color;
+    background: $app-accent;
+    border-color: $app-accent;
+
     &::after {
       content: '';
       position: absolute;
@@ -2049,7 +1225,8 @@ const goHistoryVisualization = (item: PredictResultResponse) => {
 
 .pc__desc {
   font-size: $font-size-xs;
-  color: $text-muted;
+  color: $color-text-faint;
+  line-height: 1.5;
 }
 
 /* ---------- 操作按钮 ---------- */
@@ -2066,28 +1243,30 @@ const goHistoryVisualization = (item: PredictResultResponse) => {
   justify-content: center;
   gap: $spacing-xs;
   padding: $spacing-sm $spacing-lg;
-  border-radius: $border-radius-md;
+  border-radius: $radius-control;
   border: none;
   font-size: $font-size-base;
   cursor: pointer;
   transition: $transition-fast;
+
   &--primary {
-    background: $primary-color;
+    background: $app-accent;
     color: #fff;
-    &:hover:not(:disabled) { background: $primary-light; }
+    &:hover:not(:disabled) { background: $app-accent-strong; }
   }
   &--secondary {
-    background: $bg-tertiary;
-    color: $text-secondary;
-    border: 1px solid $border-color;
-    &:hover:not(:disabled) { background: $border-light; }
+    background: $color-surface-sunken;
+    color: $color-text-soft;
+    border: 1px solid $color-border;
+    &:hover:not(:disabled) { background: $color-border-soft; color: $color-text; }
   }
   &--ghost {
     background: transparent;
-    color: $accent-color;
-    &:hover { background: rgba(59, 130, 246, 0.08); }
+    color: $app-accent;
+    &:hover { background: $app-accent-softer; }
   }
   &--block { width: 100%; }
+
   &:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
@@ -2112,7 +1291,7 @@ const goHistoryVisualization = (item: PredictResultResponse) => {
 .pc__error {
   margin-top: $spacing-md;
   padding: $spacing-sm $spacing-md;
-  border-radius: $border-radius-md;
+  border-radius: $radius-control;
   background: rgba(239, 68, 68, 0.08);
   color: $error-color;
   font-size: $font-size-sm;
@@ -2128,14 +1307,14 @@ const goHistoryVisualization = (item: PredictResultResponse) => {
 
 .pc__select {
   padding: $spacing-sm $spacing-md;
-  border: 1px solid $border-color;
-  border-radius: $border-radius-md;
+  border: 1px solid $color-border;
+  border-radius: $radius-control;
   font-size: $font-size-base;
-  background: $bg-primary;
-  color: $text-primary;
+  background: $color-surface;
+  color: $color-text;
   align-self: flex-start;
   min-width: 160px;
-  &:focus { outline: none; border-color: $accent-color; }
+  &:focus { outline: none; border-color: $app-accent; }
 }
 
 .pc__dropzone {
@@ -2145,14 +1324,20 @@ const goHistoryVisualization = (item: PredictResultResponse) => {
   justify-content: center;
   gap: $spacing-xs;
   padding: $spacing-xl;
-  border: 2px dashed $border-color;
-  border-radius: $border-radius-md;
-  background: $bg-secondary;
+  border: 2px dashed $color-border;
+  border-radius: $radius-control;
+  background: $color-surface-alt;
   cursor: pointer;
   text-align: center;
-  transition: $transition-normal;
-  &:hover { border-color: $accent-light; background: rgba(59, 130, 246, 0.04); }
-  &--has { border-style: solid; border-color: $success-color; background: rgba(16, 185, 129, 0.05); }
+  transition: border-color $transition-normal, background $transition-normal;
+
+  &:hover { border-color: $app-accent; background: $app-accent-softer; }
+
+  &--has {
+    border-style: solid;
+    border-color: $app-success;
+    background: $app-success-soft;
+  }
 }
 
 .pc__file {
@@ -2160,25 +1345,29 @@ const goHistoryVisualization = (item: PredictResultResponse) => {
 }
 
 .pc__dropzone-icon {
-  font-size: $font-size-3xl;
+  width: 32px;
+  height: 32px;
+  color: $color-text-faint;
+
+  &--ok { color: $app-success; }
 }
 
 .pc__dropzone-text {
   font-size: $font-size-base;
-  font-weight: 600;
-  color: $text-primary;
+  font-weight: $font-weight-semibold;
+  color: $color-text;
 }
 
 .pc__dropzone-sub {
   font-size: $font-size-xs;
-  color: $text-muted;
+  color: $color-text-faint;
 }
 
 .pc__batch-status {
   margin-top: $spacing-lg;
   padding: $spacing-md;
-  background: $bg-tertiary;
-  border-radius: $border-radius-md;
+  background: $color-surface-sunken;
+  border-radius: $radius-control;
 }
 
 .pc__batch-status-row {
@@ -2190,22 +1379,23 @@ const goHistoryVisualization = (item: PredictResultResponse) => {
 }
 
 .pc__batch-id {
-  color: $text-secondary;
+  color: $color-text-soft;
   font-family: monospace;
 }
 
 .pc__batch-pct {
-  font-weight: 700;
-  color: $text-primary;
+  font-weight: $font-weight-bold;
+  color: $color-text;
 }
 
 .pc__batch-state {
   padding: 2px 10px;
-  border-radius: 999px;
+  border-radius: $radius-pill;
   font-size: $font-size-xs;
-  font-weight: 600;
-  &--pending { background: rgba(148, 163, 184, 0.15); color: $text-muted; }
-  &--processing { background: rgba(59, 130, 246, 0.12); color: $info-color; }
+  font-weight: $font-weight-semibold;
+
+  &--pending { background: rgba(148, 163, 184, 0.15); color: $color-text-faint; }
+  &--processing { background: rgba(8, 145, 178, 0.12); color: $app-accent-strong; }
   &--success { background: rgba(16, 185, 129, 0.12); color: $success-color; }
   &--fail { background: rgba(239, 68, 68, 0.12); color: $error-color; }
 }
@@ -2213,16 +1403,16 @@ const goHistoryVisualization = (item: PredictResultResponse) => {
 .pc__progress {
   width: 100%;
   height: 8px;
-  background: $border-color;
-  border-radius: 999px;
+  background: $color-border;
+  border-radius: $radius-pill;
   overflow: hidden;
   margin-bottom: $spacing-md;
 }
 
 .pc__progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, $accent-color, $accent-light);
-  border-radius: 999px;
+  background: linear-gradient(90deg, $app-accent, $app-brand);
+  border-radius: $radius-pill;
   transition: width 0.3s ease;
 }
 
@@ -2238,19 +1428,18 @@ const goHistoryVisualization = (item: PredictResultResponse) => {
   display: block;
   margin-top: $spacing-xs;
   font-size: $font-size-xs;
-  color: $text-muted;
+  color: $color-text-faint;
 }
 
 .pc__badge {
   padding: 4px 12px;
-  border-radius: 999px;
-  background: rgba(59, 130, 246, 0.1);
-  color: $accent-color;
+  border-radius: $radius-pill;
+  background: $app-accent-soft;
+  color: $app-accent-strong;
   font-size: $font-size-xs;
-  font-weight: 600;
+  font-weight: $font-weight-semibold;
 }
 
-/* 结果区右上角的徽标容器（数据集名 + 低于阈值提示） */
 .pc__result-badges {
   display: flex;
   flex-wrap: wrap;
@@ -2258,7 +1447,6 @@ const goHistoryVisualization = (item: PredictResultResponse) => {
   align-items: center;
 }
 
-/* 置信度低于"高级选项"设定阈值时的提示徽标 */
 .pc__badge--warn {
   background: rgba(239, 68, 68, 0.12);
   color: $error-color;
@@ -2269,8 +1457,8 @@ const goHistoryVisualization = (item: PredictResultResponse) => {
   grid-template-columns: 200px 1fr;
   gap: $spacing-xl;
   padding: $spacing-lg;
-  background: $bg-secondary;
-  border-radius: $border-radius-md;
+  background: $color-surface-alt;
+  border-radius: $radius-control;
 }
 
 .pc__score {
@@ -2298,18 +1486,18 @@ const goHistoryVisualization = (item: PredictResultResponse) => {
   align-items: center;
   justify-content: center;
   font-size: $font-size-xl;
-  font-weight: 700;
-  color: $text-primary;
+  font-weight: $font-weight-bold;
+  color: $color-text;
 }
 
 .pc__score-label {
   font-size: $font-size-sm;
-  color: $text-muted;
+  color: $color-text-faint;
 }
 
 .pc__score-level {
   font-size: $font-size-sm;
-  font-weight: 600;
+  font-weight: $font-weight-semibold;
 }
 
 .pc__details {
@@ -2323,20 +1511,23 @@ const goHistoryVisualization = (item: PredictResultResponse) => {
   display: flex;
   align-items: baseline;
   gap: $spacing-md;
-  &--accent .pc__detail-val { color: $accent-color; font-size: $font-size-xl; }
+
+  &--accent .pc__detail-val { color: $app-accent; font-size: $font-size-xl; }
 }
 
 .pc__detail-label {
   width: 90px;
+  flex-shrink: 0;
   font-size: $font-size-sm;
-  color: $text-muted;
+  color: $color-text-faint;
 }
 
 .pc__detail-val {
   font-size: $font-size-lg;
-  font-weight: 600;
-  color: $text-primary;
-  small { font-size: $font-size-xs; font-weight: 400; color: $text-muted; }
+  font-weight: $font-weight-semibold;
+  color: $color-text;
+
+  small { font-size: $font-size-xs; font-weight: $font-weight-normal; color: $color-text-faint; }
 }
 
 .pc__section {
@@ -2345,11 +1536,11 @@ const goHistoryVisualization = (item: PredictResultResponse) => {
 
 .pc__section-title {
   font-size: $font-size-base;
-  font-weight: 600;
-  color: $text-primary;
+  font-weight: $font-weight-semibold;
+  color: $color-text;
   margin-bottom: $spacing-md;
   padding-bottom: $spacing-sm;
-  border-bottom: 1px solid $border-light;
+  border-bottom: 1px solid $color-border-soft;
 }
 
 .pc__interactions {
@@ -2363,21 +1554,21 @@ const goHistoryVisualization = (item: PredictResultResponse) => {
   align-items: center;
   gap: $spacing-sm;
   padding: $spacing-sm $spacing-md;
-  border: 1px solid $border-color;
-  border-radius: $border-radius-md;
-  background: $bg-primary;
+  border: 1px solid $color-border;
+  border-radius: $radius-control;
+  background: $color-surface;
 }
 
 .pc__interaction-tag {
   padding: 2px 10px;
-  border-radius: 999px;
+  border-radius: $radius-pill;
   font-size: $font-size-xs;
-  font-weight: 600;
+  font-weight: $font-weight-semibold;
 }
 
 .pc__interaction-meta {
   font-size: $font-size-sm;
-  color: $text-secondary;
+  color: $color-text-soft;
 }
 
 .pc__dataset {
@@ -2391,10 +1582,11 @@ const goHistoryVisualization = (item: PredictResultResponse) => {
   flex-direction: column;
   gap: $spacing-xs;
   padding: $spacing-md;
-  background: $bg-tertiary;
-  border-radius: $border-radius-md;
-  span { font-size: $font-size-xs; color: $text-muted; }
-  b { font-size: $font-size-sm; color: $text-primary; }
+  background: $color-surface-sunken;
+  border-radius: $radius-control;
+
+  span { font-size: $font-size-xs; color: $color-text-faint; }
+  b { font-size: $font-size-sm; color: $color-text; }
 }
 
 .pc__result-actions {
@@ -2403,15 +1595,16 @@ const goHistoryVisualization = (item: PredictResultResponse) => {
   gap: $spacing-md;
   margin-top: $spacing-lg;
   padding-top: $spacing-lg;
-  border-top: 1px solid $border-light;
+  border-top: 1px solid $color-border-soft;
 }
 
 /* ---------- 预测历史 ---------- */
 .pc__state {
   padding: $spacing-2xl;
   text-align: center;
-  color: $text-muted;
+  color: $color-text-faint;
   font-size: $font-size-base;
+
   &--error { color: $error-color; }
 }
 
@@ -2420,10 +1613,11 @@ const goHistoryVisualization = (item: PredictResultResponse) => {
   flex-direction: column;
   gap: $spacing-md;
   padding: $spacing-lg;
-  border: 1px solid $border-color;
-  border-radius: $border-radius-md;
-  background: $bg-primary;
+  border: 1px solid $color-border;
+  border-radius: $radius-control;
+  background: $color-surface;
   margin-bottom: $spacing-md;
+
   &:last-child { margin-bottom: 0; }
 }
 
@@ -2435,16 +1629,16 @@ const goHistoryVisualization = (item: PredictResultResponse) => {
 
 .pc__history-type {
   padding: 3px 10px;
-  border-radius: 999px;
-  background: rgba(59, 130, 246, 0.1);
-  color: $accent-color;
+  border-radius: $radius-pill;
+  background: $app-accent-soft;
+  color: $app-accent-strong;
   font-size: $font-size-xs;
-  font-weight: 600;
+  font-weight: $font-weight-semibold;
 }
 
 .pc__history-time {
   font-size: $font-size-xs;
-  color: $text-muted;
+  color: $color-text-faint;
 }
 
 .pc__history-body {
@@ -2463,12 +1657,13 @@ const goHistoryVisualization = (item: PredictResultResponse) => {
   flex-shrink: 0;
   width: 90px;
   font-size: $font-size-sm;
-  color: $text-muted;
+  color: $color-text-faint;
 }
 
 .pc__history-value {
   font-size: $font-size-sm;
-  color: $text-primary;
+  color: $color-text;
+
   &--smiles {
     font-family: monospace;
     word-break: break-all;
@@ -2478,17 +1673,48 @@ const goHistoryVisualization = (item: PredictResultResponse) => {
 .pc__history-confidence {
   margin-left: $spacing-sm;
   font-size: $font-size-xs;
-  font-weight: 600;
+  font-weight: $font-weight-semibold;
 }
 
 .pc__history-actions {
   display: flex;
   gap: $spacing-sm;
   padding-top: $spacing-md;
-  border-top: 1px solid $border-light;
+  border-top: 1px solid $color-border-soft;
+
   .pc__btn {
     padding: $spacing-xs $spacing-md;
     font-size: $font-size-sm;
+  }
+}
+
+/* ---------- 响应式 ---------- */
+@media (max-width: 900px) {
+  .pc__types {
+    grid-template-columns: 1fr;
+  }
+
+  .pc__form {
+    grid-template-columns: 1fr;
+  }
+
+  .pc__vs {
+    margin-top: 0;
+    align-self: center;
+
+    span { width: 32px; height: 32px; }
+  }
+
+  .pc__advanced-body {
+    grid-template-columns: 1fr;
+  }
+
+  .pc__result-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pc__dataset {
+    grid-template-columns: 1fr;
   }
 }
 </style>

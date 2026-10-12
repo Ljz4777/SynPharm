@@ -1,11 +1,25 @@
 <template>
   <header class="topbar">
     <div class="topbar__brand" @click="router.push('/dashboard')">
-      <span class="topbar__logo">🧬</span>
+      <svg class="topbar__logo" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <path
+          d="M16 4L26.4 10V22L16 28L5.6 22V10L16 4Z"
+          stroke="currentColor"
+          stroke-width="2"
+          fill="rgba(8, 145, 178, 0.14)"
+        />
+        <circle cx="16" cy="16" r="3" fill="currentColor" />
+        <circle cx="16" cy="9" r="1.6" fill="currentColor" />
+        <circle cx="22.5" cy="12.5" r="1.6" fill="currentColor" />
+        <circle cx="22.5" cy="19.5" r="1.6" fill="currentColor" />
+        <circle cx="16" cy="23" r="1.6" fill="currentColor" />
+        <circle cx="9.5" cy="19.5" r="1.6" fill="currentColor" />
+        <circle cx="9.5" cy="12.5" r="1.6" fill="currentColor" />
+      </svg>
       <span class="topbar__name">SynPharm</span>
     </div>
 
-    <!-- 一级导航：横向平铺，当前栏目高亮（不再用下拉框，避免栏目被藏起来） -->
+    <!-- 一级导航：横向平铺文字链接，当前栏目用青色下划线点亮（不再用卡片/emoji，降低噪声） -->
     <nav class="topbar__nav" aria-label="主导航">
       <router-link
         v-for="item in navItems"
@@ -15,8 +29,7 @@
         :class="{ 'topbar__link--active': isActive(item) }"
         :title="item.label"
       >
-        <span class="topbar__link-icon">{{ item.icon }}</span>
-        <span class="topbar__link-label">{{ item.label }}</span>
+        {{ item.label }}
       </router-link>
     </nav>
 
@@ -43,7 +56,6 @@ const route = useRoute()
 interface NavItem {
   path: string
   label: string
-  icon: string
   /** 用于高亮的路径前缀，可多个（详情页需点亮其所属一级栏目） */
   match: string[]
 }
@@ -56,13 +68,13 @@ interface NavItem {
  * 深链进来，那部分属于预测域数据，工作台的口袋页签替代不了，所以只从导航移除、不删页面。
  */
 const navItems: NavItem[] = [
-  { path: '/design', label: '设计工作台', icon: '🧬', match: ['/design'] },
-  { path: '/dashboard', label: '仪表盘', icon: '📊', match: ['/dashboard'] },
-  { path: '/predict', label: '预测中心', icon: '🎯', match: ['/predict'] },
-  { path: '/results', label: '预测结果', icon: '📈', match: ['/results', '/result'] },
-  { path: '/tasks', label: '任务管理', icon: '📋', match: ['/tasks'] },
-  { path: '/targets', label: '靶点库', icon: '🧪', match: ['/targets'] },
-  { path: '/profile', label: '个人中心', icon: '👤', match: ['/profile'] }
+  { path: '/design', label: '设计工作台', match: ['/design'] },
+  { path: '/dashboard', label: '仪表盘', match: ['/dashboard'] },
+  { path: '/predict', label: '预测中心', match: ['/predict'] },
+  { path: '/results', label: '预测结果', match: ['/results', '/result'] },
+  { path: '/tasks', label: '任务管理', match: ['/tasks'] },
+  { path: '/targets', label: '靶点库', match: ['/targets'] },
+  { path: '/profile', label: '个人中心', match: ['/profile'] }
 ]
 
 /**
@@ -73,7 +85,7 @@ const isActive = (item: NavItem): boolean =>
   item.match.some((prefix) => route.path === prefix || route.path.startsWith(prefix + '/'))
 
 const avatarText = computed(() => {
-  if (!authStore.userNickname) return '👤'
+  if (!authStore.userNickname) return 'S'
   return authStore.userNickname.charAt(0).toUpperCase()
 })
 
@@ -90,14 +102,13 @@ const handleLogout = () => {
   left: 0;
   right: 0;
   height: $header-height;
-  background: $bg-sidebar;
+  background: $app-shell-bg;
   color: #fff;
   display: flex;
   align-items: center;
   padding: 0 $spacing-lg;
   gap: $spacing-xl;
   z-index: $z-sticky;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
 }
 
 .topbar__brand {
@@ -105,73 +116,104 @@ const handleLogout = () => {
   align-items: center;
   gap: $spacing-sm;
   cursor: pointer;
+  flex-shrink: 0;
 }
 
-.topbar__logo { font-size: 20px; }
-.topbar__name { font-size: $font-size-lg; font-weight: 600; }
+.topbar__logo {
+  width: 26px;
+  height: 26px;
+  color: $app-accent;
+}
+
+.topbar__name {
+  font-size: $font-size-lg;
+  font-weight: 600;
+  color: $app-shell-text;
+  letter-spacing: -0.2px;
+}
 
 .topbar__nav {
   flex: 1;
   display: flex;
-  align-items: center;
-  gap: $spacing-xs;
+  align-items: stretch;
+  align-self: stretch;
   min-width: 0;
   overflow-x: auto;
   scrollbar-width: none;
-  &::-webkit-scrollbar { display: none; }
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 .topbar__link {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 32px;
   padding: 0 $spacing-md;
-  border-radius: $border-radius-md;
-  color: rgba(255, 255, 255, 0.66);
+  color: $app-shell-muted;
   font-size: $font-size-sm;
   text-decoration: none;
   white-space: nowrap;
-  transition: $transition-fast;
+  transition: color $transition-fast;
 
   &:hover {
-    color: #fff;
-    background: rgba(255, 255, 255, 0.08);
+    color: $app-shell-text;
   }
 
-  // 当前栏目：蓝色底 + 内描边，比单纯变色更容易扫视
+  // 当前栏目：白色字 + 底部青色指示条，比单纯变色更易扫视
+  &::after {
+    content: '';
+    position: absolute;
+    left: $spacing-md;
+    right: $spacing-md;
+    bottom: 0;
+    height: 2px;
+    border-radius: $radius-pill;
+    background: transparent;
+    transition: background $transition-fast;
+  }
+
   &--active {
     color: #fff;
-    font-weight: 500;
-    background: rgba(59, 130, 246, 0.22);
-    box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.35);
+    font-weight: $font-weight-medium;
+
+    &::after {
+      background: $app-accent;
+    }
   }
 }
 
-.topbar__link-icon { font-size: 14px; line-height: 1; }
-
-// 窄屏放不下 7 项时只留图标，名称通过 title 悬浮查看
+// 窄屏放不下 7 项时压缩间距，靠横向滚动兜底
 @media (max-width: 1200px) {
-  .topbar__link { padding: 0 $spacing-sm; }
-  .topbar__link-label { display: none; }
+  .topbar__link {
+    padding: 0 $spacing-sm;
+
+    &::after {
+      left: $spacing-sm;
+      right: $spacing-sm;
+    }
+  }
 }
 
 .topbar__user {
   display: flex;
   align-items: center;
   gap: $spacing-md;
+  flex-shrink: 0;
 }
 
 .topbar__avatar {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: rgba(59, 130, 246, 0.35);
+  background: rgba(8, 145, 178, 0.28);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: $font-size-sm;
   font-weight: 600;
+  color: $app-shell-text;
 }
 
 .topbar__user-info {
@@ -180,18 +222,27 @@ const handleLogout = () => {
   gap: 1px;
 }
 
-.topbar__name-text { font-size: $font-size-sm; font-weight: 500; }
-.topbar__role { font-size: $font-size-xs; color: rgba(255, 255, 255, 0.45); }
+.topbar__name-text {
+  font-size: $font-size-sm;
+  font-weight: 500;
+  color: $app-shell-text;
+}
+
+.topbar__role {
+  font-size: $font-size-xs;
+  color: $app-shell-muted;
+}
 
 .topbar__logout {
   background: transparent;
   border: none;
-  color: rgba(255, 255, 255, 0.6);
+  color: $app-shell-muted;
   font-size: $font-size-xs;
   cursor: pointer;
   padding: $spacing-xs $spacing-sm;
   border-radius: $border-radius-sm;
-  transition: $transition-fast;
+  transition: all $transition-fast;
+
   &:hover {
     background: rgba(239, 68, 68, 0.12);
     color: $error-color;

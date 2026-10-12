@@ -3,18 +3,18 @@
     <Sidebar />
 
     <main class="profile__content">
-      <!-- ==================== 身份横幅 ==================== -->
+      <!-- ==================== 用户资料头部（紧凑浅色） ==================== -->
       <header class="profile__hero">
-        <div class="profile__hero-bg" aria-hidden="true"></div>
-
         <div class="profile__avatar" aria-hidden="true">{{ avatarText }}</div>
 
         <div class="profile__identity">
           <h1 class="profile__name">{{ authStore.userNickname }}</h1>
-          <p class="profile__email">{{ authStore.user?.email || '—' }}</p>
-          <div class="profile__badges">
-            <span class="profile__badge">{{ authStore.isGuest ? '游客账号' : '注册用户' }}</span>
-            <span class="profile__badge" :class="{ 'profile__badge--ok': isEmailVerified }">
+          <div class="profile__meta">
+            <span class="profile__email">{{ authStore.user?.email || '—' }}</span>
+            <span class="profile__sep" aria-hidden="true">·</span>
+            <span class="profile__role">{{ authStore.isGuest ? '游客账号' : '注册用户' }}</span>
+            <span class="profile__sep" aria-hidden="true">·</span>
+            <span class="profile__verify" :class="{ 'profile__verify--ok': isEmailVerified }">
               {{ isEmailVerified ? '邮箱已验证' : '邮箱未验证' }}
             </span>
           </div>
@@ -33,8 +33,7 @@
             :class="{ 'profile__nav-item--active': activeSection === s.id }"
             @click="goSection(s.id)"
           >
-            <span class="profile__nav-icon" aria-hidden="true">{{ s.icon }}</span>
-            <span>{{ s.label }}</span>
+            {{ s.label }}
           </button>
         </aside>
 
@@ -45,16 +44,36 @@
             <h2 class="panel__title">账号安全</h2>
 
             <button class="row" @click="openPasswordModal">
-              <span class="row__icon" aria-hidden="true">🔐</span>
-              <span class="row__label">修改密码</span>
-              <span class="row__arrow" aria-hidden="true">›</span>
+              <span class="row__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="4" y="11" width="16" height="9" rx="2" />
+                  <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+                </svg>
+              </span>
+              <span class="row__text">
+                <span class="row__label">修改密码</span>
+                <span class="row__desc">定期更新登录密码，保护账号安全</span>
+              </span>
+              <span class="row__arrow" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6" /></svg>
+              </span>
             </button>
 
             <button class="row" @click="openEmailModal">
-              <span class="row__icon" aria-hidden="true">📧</span>
-              <span class="row__label">{{ isEmailVerified ? '换绑邮箱' : '绑定邮箱' }}</span>
-              <span class="row__value">{{ emailDisplay }}</span>
-              <span class="row__arrow" aria-hidden="true">›</span>
+              <span class="row__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="5" width="18" height="14" rx="2" />
+                  <path d="m3 7 9 6 9-6" />
+                </svg>
+              </span>
+              <span class="row__text">
+                <span class="row__label">{{ isEmailVerified ? '换绑邮箱' : '绑定邮箱' }}</span>
+                <span class="row__desc">{{ isEmailVerified ? emailDisplay : '绑定邮箱用于接收验证码与找回密码' }}</span>
+              </span>
+              <span class="row__value">{{ isEmailVerified ? emailDisplay : '未绑定' }}</span>
+              <span class="row__arrow" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6" /></svg>
+              </span>
             </button>
           </section>
 
@@ -70,30 +89,58 @@
             <p v-if="statsError" class="panel__error">{{ statsError }}</p>
 
             <div class="stats-grid">
-              <StatCard
-                icon="📋"
-                tone="brand"
-                :value="statsLoading ? '—' : stats.totalTasks"
-                label="总任务数"
-              />
-              <StatCard
-                icon="✅"
-                tone="success"
-                :value="statsLoading ? '—' : stats.completedTasks"
-                label="已完成任务"
-              />
-              <StatCard
-                icon="📊"
-                tone="info"
-                :value="statsLoading ? '—' : stats.totalResults"
-                label="预测结果"
-              />
-              <StatCard
-                icon="⭐"
-                tone="warning"
-                :value="statsLoading ? '—' : stats.totalFavorites"
-                label="我的收藏"
-              />
+              <div class="stat">
+                <span class="stat__icon stat__icon--brand" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" />
+                    <rect x="9" y="3" width="6" height="4" rx="1" />
+                    <path d="M9 12h6M9 16h4" />
+                  </svg>
+                </span>
+                <div class="stat__text">
+                  <span class="stat__value">{{ statsLoading ? '—' : stats.totalTasks }}</span>
+                  <span class="stat__label">总任务数</span>
+                </div>
+              </div>
+
+              <div class="stat">
+                <span class="stat__icon stat__icon--success" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="m9 12 2 2 4-4" />
+                  </svg>
+                </span>
+                <div class="stat__text">
+                  <span class="stat__value">{{ statsLoading ? '—' : stats.completedTasks }}</span>
+                  <span class="stat__label">已完成任务</span>
+                </div>
+              </div>
+
+              <div class="stat">
+                <span class="stat__icon stat__icon--info" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M5 20V10" />
+                    <path d="M12 20V4" />
+                    <path d="M19 20v-6" />
+                  </svg>
+                </span>
+                <div class="stat__text">
+                  <span class="stat__value">{{ statsLoading ? '—' : stats.totalResults }}</span>
+                  <span class="stat__label">预测结果</span>
+                </div>
+              </div>
+
+              <div class="stat">
+                <span class="stat__icon stat__icon--warning" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1L3.2 9.5l6.1-.9L12 3z" />
+                  </svg>
+                </span>
+                <div class="stat__text">
+                  <span class="stat__value">{{ statsLoading ? '—' : stats.totalFavorites }}</span>
+                  <span class="stat__label">我的收藏</span>
+                </div>
+              </div>
             </div>
           </section>
 
@@ -377,7 +424,6 @@ import { taskApi, resultApi } from '@/api/predict'
 import { favoriteApi } from '@/api/favorite'
 import { authApi, type LoginLogItem, type UserDTO } from '@/api/auth'
 import Sidebar from '@/components/Sidebar.vue'
-import StatCard from '@/components/ui/StatCard.vue'
 import StatusTag from '@/components/ui/StatusTag.vue'
 import type { Task } from '@/types'
 
@@ -386,11 +432,11 @@ const router = useRouter()
 
 /** 左侧锚点导航。id 必须与 template 中 section 的 id 一致 */
 const SECTIONS = [
-  { id: 'security', label: '账号安全', icon: '🔐' },
-  { id: 'stats', label: '使用统计', icon: '📊' },
-  { id: 'research', label: '科研档案', icon: '🧬' },
-  { id: 'logs', label: '登录记录', icon: '🕘' },
-  { id: 'danger', label: '危险操作', icon: '⚠️' }
+  { id: 'security', label: '账号安全' },
+  { id: 'stats', label: '使用统计' },
+  { id: 'research', label: '科研档案' },
+  { id: 'logs', label: '登录记录' },
+  { id: 'danger', label: '危险操作' }
 ] as const
 
 /** 登录记录拉取条数上限，需与后端 MAX_LOGIN_LOG_LIMIT 保持一致 */
@@ -411,7 +457,7 @@ const emailDisplay = computed(() =>
 )
 
 const avatarText = computed(() => {
-  if (!authStore.userNickname) return '👤'
+  if (!authStore.userNickname) return 'S'
   return authStore.userNickname.charAt(0).toUpperCase()
 })
 
@@ -841,111 +887,94 @@ onUnmounted(() => {
 .profile__content {
   flex: 1;
   min-height: calc(100vh - #{$header-height});
+  padding: $spacing-lg $spacing-xl $spacing-2xl;
 }
 
-// ==================== 身份横幅 ====================
+// ==================== 用户资料头部（紧凑浅色） ====================
 .profile__hero {
-  position: relative;
   display: flex;
   align-items: center;
   gap: $spacing-lg;
-  padding: $spacing-xl;
-  overflow: hidden;
-  background: linear-gradient(135deg, $color-brand 0%, $primary-color 100%);
-}
-
-// 静态光斑：不做无限动画，避免持续占用 GPU 且不响应"减少动效"偏好
-.profile__hero-bg {
-  position: absolute;
-  top: -60%;
-  left: -20%;
-  width: 900px;
-  height: 900px;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.12) 0%, transparent 70%);
-  pointer-events: none;
+  padding: $spacing-lg $spacing-xl;
+  background: $color-surface;
+  border: 1px solid $color-border;
+  border-radius: $radius-card;
+  box-shadow: $shadow-card;
+  margin-bottom: $spacing-lg;
 }
 
 .profile__avatar {
-  position: relative;
   flex-shrink: 0;
-  width: 88px;
-  height: 88px;
+  width: 56px;
+  height: 56px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.2);
-  border: 3px solid rgba(255, 255, 255, 0.3);
-  font-size: $font-size-3xl;
-  font-weight: $font-weight-bold;
-  color: #ffffff;
+  background: $app-accent-soft;
+  color: $app-accent-strong;
+  font-size: $font-size-xl;
+  font-weight: $font-weight-semibold;
 }
 
 .profile__identity {
-  position: relative;
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: $spacing-xs;
+  gap: 4px;
 }
 
 .profile__name {
   margin: 0;
-  font-size: $font-size-3xl;
-  font-weight: $font-weight-bold;
-  color: #ffffff;
+  font-size: $font-size-xl;
+  font-weight: $font-weight-semibold;
+  color: $color-text;
+  line-height: 1.3;
+}
+
+.profile__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: $spacing-sm;
+  font-size: $font-size-sm;
+  color: $color-text-faint;
 }
 
 .profile__email {
-  margin: 0;
-  font-size: $font-size-base;
-  color: rgba(255, 255, 255, 0.85);
   overflow-wrap: anywhere;
+  color: $color-text-soft;
 }
 
-.profile__badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: $spacing-sm;
-  margin-top: $spacing-xs;
+.profile__sep {
+  color: $color-border;
 }
 
-.profile__badge {
-  padding: 4px 12px;
-  border-radius: $radius-pill;
-  background: rgba(255, 255, 255, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  font-size: $font-size-xs;
+.profile__verify {
   font-weight: $font-weight-medium;
-  color: rgba(255, 255, 255, 0.92);
+  color: $warning-color;
 
   &--ok {
-    background: rgba(16, 185, 129, 0.28);
-    border-color: rgba(16, 185, 129, 0.5);
+    color: $app-success;
   }
 }
 
 .profile__hero-btn {
-  position: relative;
   flex-shrink: 0;
   padding: $spacing-sm $spacing-lg;
   border-radius: $radius-control;
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid $color-border;
+  background: $color-surface;
   font-size: $font-size-sm;
   font-weight: $font-weight-medium;
-  color: #ffffff;
+  color: $app-accent-strong;
   cursor: pointer;
-  transition: background 0.18s $ease-out;
+  transition: all $transition-fast;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.32);
-  }
-
-  &:focus-visible {
-    outline: 2px solid #ffffff;
-    outline-offset: 2px;
+    border-color: $app-accent;
+    background: $app-accent-softer;
   }
 }
 
@@ -955,7 +984,6 @@ onUnmounted(() => {
   grid-template-columns: 180px minmax(0, 1fr);
   align-items: start;
   gap: $spacing-lg;
-  padding: $spacing-xl;
 }
 
 .profile__nav {
@@ -980,8 +1008,8 @@ onUnmounted(() => {
   text-align: left;
   cursor: pointer;
   transition:
-    background 0.18s $ease-out,
-    color 0.18s $ease-out;
+    background $transition-fast,
+    color $transition-fast;
 
   &:hover {
     background: $color-surface-sunken;
@@ -989,19 +1017,10 @@ onUnmounted(() => {
   }
 
   &--active {
-    background: $color-brand-soft;
-    color: $color-brand-strong;
-    font-weight: $font-weight-semibold;
+    background: $app-brand-soft;
+    color: $app-brand;
+    font-weight: $font-weight-medium;
   }
-
-  &:focus-visible {
-    outline: 2px solid $color-brand;
-    outline-offset: 2px;
-  }
-}
-
-.profile__nav-icon {
-  font-size: $font-size-base;
 }
 
 .profile__panels {
@@ -1076,7 +1095,7 @@ onUnmounted(() => {
   margin-top: $spacing-lg;
 }
 
-// ==================== 行式操作 ====================
+// ==================== 行式操作（账号安全） ====================
 .row {
   display: flex;
   align-items: center;
@@ -1091,27 +1110,47 @@ onUnmounted(() => {
   text-align: left;
   cursor: pointer;
   transition:
-    background 0.18s $ease-out,
-    border-color 0.18s $ease-out;
+    background $transition-fast,
+    border-color $transition-fast;
+
+  &:last-child { margin-bottom: 0; }
 
   &:hover {
     background: $color-surface-sunken;
     border-color: $color-border;
   }
-
-  &:focus-visible {
-    outline: 2px solid $color-brand;
-    outline-offset: 2px;
-  }
 }
 
 .row__icon {
-  font-size: $font-size-lg;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: $radius-control;
+  background: $app-accent-softer;
+  color: $app-accent-strong;
+
+  svg { width: 18px; height: 18px; }
+}
+
+.row__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .row__label {
-  flex: 1;
   color: $color-text;
+  font-weight: $font-weight-medium;
+}
+
+.row__desc {
+  font-size: $font-size-xs;
+  color: $color-text-faint;
 }
 
 .row__value {
@@ -1121,8 +1160,11 @@ onUnmounted(() => {
 }
 
 .row__arrow {
-  font-size: $font-size-lg;
+  flex-shrink: 0;
+  display: flex;
   color: $color-text-faint;
+
+  svg { width: 16px; height: 16px; }
 }
 
 // ==================== 统计 ====================
@@ -1130,6 +1172,54 @@ onUnmounted(() => {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: $spacing-md;
+}
+
+.stat {
+  display: flex;
+  align-items: center;
+  gap: $spacing-md;
+  padding: $spacing-lg;
+  background: $color-surface;
+  border: 1px solid $color-border;
+  border-radius: $radius-card;
+  transition: border-color $transition-fast;
+}
+
+.stat__icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: $radius-control;
+
+  svg { width: 20px; height: 20px; }
+
+  &--brand   { color: #0890b0; background: rgba(8, 144, 176, 0.12); }
+  &--success { color: #10b880; background: rgba(16, 184, 128, 0.12); }
+  &--info    { color: #3880f0; background: rgba(56, 128, 240, 0.12); }
+  &--warning { color: #f59e0b; background: rgba(245, 158, 11, 0.14); }
+}
+
+.stat__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.stat__value {
+  font-size: $font-size-2xl;
+  font-weight: $font-weight-semibold;
+  line-height: 1.15;
+  color: $color-text;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat__label {
+  font-size: $font-size-sm;
+  color: $color-text-faint;
 }
 
 // ==================== 表单 ====================
@@ -1160,8 +1250,8 @@ onUnmounted(() => {
   font-size: $font-size-base;
   color: $color-text;
   transition:
-    border-color 0.18s $ease-out,
-    box-shadow 0.18s $ease-out;
+    border-color $transition-fast,
+    box-shadow $transition-fast;
 
   &::placeholder {
     color: $color-text-faint;
@@ -1169,8 +1259,8 @@ onUnmounted(() => {
 
   &:focus {
     outline: none;
-    border-color: $color-brand;
-    box-shadow: $shadow-focus;
+    border-color: $app-accent;
+    box-shadow: 0 0 0 3px rgba(8, 145, 178, 0.16);
   }
 }
 
@@ -1240,28 +1330,23 @@ onUnmounted(() => {
   color: $color-text;
   cursor: pointer;
   transition:
-    background 0.18s $ease-out,
-    border-color 0.18s $ease-out,
-    opacity 0.18s $ease-out;
+    background $transition-fast,
+    border-color $transition-fast,
+    opacity $transition-fast;
 
   &:disabled {
     opacity: 0.55;
     cursor: not-allowed;
   }
 
-  &:focus-visible {
-    outline: 2px solid $color-brand;
-    outline-offset: 2px;
-  }
-
   &--primary {
-    background: $color-brand;
-    border-color: $color-brand;
+    background: $app-accent;
+    border-color: $app-accent;
     color: #ffffff;
 
     &:hover:not(:disabled) {
-      background: $color-brand-strong;
-      border-color: $color-brand-strong;
+      background: $app-accent-strong;
+      border-color: $app-accent-strong;
     }
   }
 
@@ -1366,8 +1451,8 @@ onUnmounted(() => {
   font-size: $font-size-base;
   color: $color-text;
   transition:
-    border-color 0.18s $ease-out,
-    box-shadow 0.18s $ease-out;
+    border-color $transition-fast,
+    box-shadow $transition-fast;
 
   &::placeholder {
     color: $color-text-faint;
@@ -1375,8 +1460,8 @@ onUnmounted(() => {
 
   &:focus {
     outline: none;
-    border-color: $color-brand;
-    box-shadow: $shadow-focus;
+    border-color: $app-accent;
+    box-shadow: 0 0 0 3px rgba(8, 145, 178, 0.16);
   }
 }
 
@@ -1386,7 +1471,7 @@ onUnmounted(() => {
 
   &--dev {
     margin: 0 0 $spacing-md;
-    color: $color-brand-strong;
+    color: $app-accent-strong;
   }
 }
 
@@ -1427,28 +1512,23 @@ onUnmounted(() => {
   color: $color-text;
   cursor: pointer;
   transition:
-    background 0.18s $ease-out,
-    border-color 0.18s $ease-out,
-    opacity 0.18s $ease-out;
+    background $transition-fast,
+    border-color $transition-fast,
+    opacity $transition-fast;
 
   &:disabled {
     opacity: 0.55;
     cursor: not-allowed;
   }
 
-  &:focus-visible {
-    outline: 2px solid $color-brand;
-    outline-offset: 2px;
-  }
-
   &--primary {
-    background: $color-brand;
-    border-color: $color-brand;
+    background: $app-accent;
+    border-color: $app-accent;
     color: #ffffff;
 
     &:hover:not(:disabled) {
-      background: $color-brand-strong;
-      border-color: $color-brand-strong;
+      background: $app-accent-strong;
+      border-color: $app-accent-strong;
     }
   }
 
@@ -1476,6 +1556,10 @@ onUnmounted(() => {
 
 // ==================== 窄屏 ====================
 @media (max-width: 900px) {
+  .profile__content {
+    padding: $spacing-md;
+  }
+
   .profile__body {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -1483,16 +1567,26 @@ onUnmounted(() => {
   .profile__nav {
     position: static;
     flex-direction: row;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    overflow-x: auto;
     gap: $spacing-sm;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar { display: none; }
   }
 
   .profile__nav-item {
     width: auto;
+    flex-shrink: 0;
+    white-space: nowrap;
   }
 
   .profile__hero {
     flex-wrap: wrap;
+  }
+
+  .profile__hero-btn {
+    margin-left: auto;
   }
 }
 </style>
